@@ -11,7 +11,10 @@
     "start": "node dist/index.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:seed": "tsx src/db/seed.ts"
+    "db:seed": "tsx src/db/seed.ts",
+    "replay": "tsx src/replay/cli.ts run",
+    "replay:reset": "tsx src/replay/cli.ts reset",
+    "test": "vitest run"
   },
   "dependencies": {
     "@pocketpilot/shared": "0.1.0",
@@ -19,6 +22,7 @@
     "drizzle-orm": "latest",
     "express": "latest",
     "pg": "latest",
+    "yaml": "^2.6.1",
     "zod": "latest"
   },
   "devDependencies": {
@@ -26,6 +30,7 @@
     "@types/node": "latest",
     "@types/pg": "latest",
     "drizzle-kit": "latest",
-    "tsx": "latest"
+    "tsx": "latest",
+    "vitest": "latest"
   }
 }

@@ -1,0 +1,63 @@
+schema_version: 1
+id: cross-market-catalyst
+version: 1
+description: >-
+  Detects a BTC or ETH long candidate when perpetual-market participation and a liquid
+  prediction market reprice upward together without extremely crowded funding.
+supported_assets: [BTC, ETH]
+required_sources: [hyperliquid, polymarket]
+
+features:
+  price_return_pct: { window_minutes: 5, unit: percent, missing_data: no_candidate }
+  volume_ratio: { window_minutes: 5, unit: ratio, missing_data: no_candidate }
+  funding_rate: { window_minutes: 5, unit: decimal_rate, missing_data: no_candidate }
+  funding_change_bps: { window_minutes: 5, unit: basis_points, missing_data: no_candidate }
+  open_interest_change_pct: { window_minutes: 5, unit: percent, missing_data: no_candidate }
+  polymarket_probability_change_points:
+    { window_minutes: 5, unit: percentage_points, missing_data: no_candidate }
+  polymarket_liquidity_usd: { window_minutes: 5, unit: usd, missing_data: no_candidate }
+  source_recency_seconds: { window_minutes: 5, unit: seconds, missing_data: no_candidate }
+  evidence_completeness: { window_minutes: 5, unit: ratio, missing_data: no_candidate }
+
+trigger:
+  id: bullish-cross-market-confirmation
+  version: 1
+  side: LONG
+  require_all:
+    - { id: price-momentum, feature: price_return_pct, operator: gte, threshold: 1.0 }
+    - { id: volume-acceleration, feature: volume_ratio, operator: gte, threshold: 1.5 }
+    - { id: funding-not-crowded, feature: funding_rate, operator: lte, threshold: 0.0005 }
+    - { id: oi-expansion, feature: open_interest_change_pct, operator: gte, threshold: 2.0 }
+    - {
+        id: prediction-repricing,
+        feature: polymarket_probability_change_points,
+        operator: gte,
+        threshold: 8.0,
+      }
+    - {
+        id: prediction-liquidity,
+        feature: polymarket_liquidity_usd,
+        operator: gte,
+        threshold: 100000,
+      }
+    - { id: sources-fresh, feature: source_recency_seconds, operator: lte, threshold: 120 }
+    - { id: evidence-complete, feature: evidence_completeness, operator: eq, threshold: 1 }
+
+proposal:
+  defaults: { notional_usd: 100, leverage: 2, stop_loss_pct: 2 }
+  bounds:
+    notional_usd: { min: 25, max: 100 }
+    leverage: { min: 1, max: 3 }
+    stop_loss_pct: { min: 0.5, max: 5 }
+  expiry_minutes: 10
+
+evidence:
+  minimum_hyperliquid_samples: 2
+  minimum_polymarket_samples: 2
+  require_same_asset_mapping: true
+  include_source_identifiers: true
+
+invalidation_guidance:
+  - Price momentum reverses below the start of the five-minute confirmation window.
+  - Polymarket probability gives back the eight-point confirmation move.
+  - Evidence becomes older than two minutes before proposal analysis.

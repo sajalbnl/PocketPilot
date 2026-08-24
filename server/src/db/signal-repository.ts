@@ -28,6 +28,13 @@ function proposalFields(row: SignalRow): {
   }
 
   const summary = row.llmOutput && 'summary' in row.llmOutput ? row.llmOutput.summary : null;
+  if (row.candidateKey) {
+    return {
+      title: `${row.symbol} cross-market catalyst detected`,
+      thesis: 'Deterministic Hyperliquid and Polymarket thresholds aligned in the replay window.',
+      confidence: null,
+    };
+  }
   return {
     title: summary,
     thesis: summary,
@@ -45,6 +52,8 @@ export function mapSignalDetail(row: SignalRow): SignalDetail {
     side: row.side,
     state: row.state,
     dataMode: row.dataMode,
+    skillId: row.skillId,
+    skillVersion: row.skillVersion,
     category: getSignalCategory(row.state),
     ...proposal,
     proposedNotionalUsd: row.proposedNotionalUsd,

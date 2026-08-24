@@ -1,4 +1,4 @@
-# Phase 2 architecture
+# Phase 3 architecture
 
 ## Trust boundaries
 
@@ -33,7 +33,19 @@ PostgreSQL numerics; shared API contracts expose finite JavaScript numbers for t
 `hyperliquid-testnet`. In Phase 1 these select no adapters yet; they establish explicit startup
 configuration for later phases. Replay and paper are the defaults and guaranteed demo path.
 
-## Phase 2 product loop
+## Replay signal pipeline
+
+Replay fixtures and future live clients implement the same `MarketEventSource` boundary and emit
+source-shaped events. `normalizeMarketEvent` is the only code allowed to understand those source
+payloads. All feature and signal code consumes strict normalized shared contracts.
+
+An explicit replay clock advances by source event time. The pipeline maintains source histories,
+calculates named features in pure TypeScript, and applies only the operators accepted by the strict
+YAML parser. A candidate key includes skill ID/version, trigger version, asset, replay ID, and window
+end. An in-process set suppresses repeats within one run; a unique database index prevents duplicates
+across processes and reruns. Generated signals enter only the legal initial `DETECTED` state.
+
+## Mobile product loop
 
 The Expo app uses one typed REST client. Important responses are parsed with shared Zod schemas
 before TanStack Query can cache them. Inbox category queries poll only for approval/monitoring

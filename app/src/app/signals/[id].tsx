@@ -48,7 +48,7 @@ export default function SignalDetailScreen() {
       : null;
   const expiredByTime = signal.expiresAt
     ? new Date(signal.expiresAt).getTime() <= Date.now()
-    : true;
+    : false;
   const approvable = signal.state === 'PENDING_APPROVAL' && !expiredByTime;
 
   return (
@@ -98,9 +98,13 @@ export default function SignalDetailScreen() {
 
         <View style={[styles.boundaryCard, styles.reasoningCard]}>
           <Text style={[styles.boundaryLabel, styles.reasoningLabel]}>
-            AGENT REASONING · SEEDED
+            {proposal
+              ? 'AGENT REASONING · PHASE 2 SEED'
+              : `DETERMINISTIC DETECTION · SKILL v${signal.skillVersion}`}
           </Text>
-          <Text style={styles.boundaryTitle}>Interpretation, not authorization</Text>
+          <Text style={styles.boundaryTitle}>
+            {proposal ? 'Interpretation, not authorization' : signal.skillId}
+          </Text>
           <Text style={styles.body}>
             {proposal?.thesis ?? signal.thesis ?? 'Analysis is still being assembled.'}
           </Text>
@@ -157,6 +161,20 @@ export default function SignalDetailScreen() {
             <Bullet key={rule} text={rule} color={colors.mint} />
           ))}
         </Section>
+
+        {signal.evidence?.featureSnapshot ? (
+          <Section title="Calculated features" subtitle="Event-time formulas; no LLM calculation">
+            <View style={styles.mandateGrid}>
+              {Object.entries(signal.evidence.featureSnapshot.values).map(([name, value]) => (
+                <Stat
+                  key={name}
+                  label={name.replaceAll('_', ' ')}
+                  value={value === null ? 'missing' : String(value)}
+                />
+              ))}
+            </View>
+          </Section>
+        ) : null}
 
         <View style={[styles.boundaryCard, styles.riskCard]}>
           <Text style={[styles.boundaryLabel, styles.riskLabel]}>

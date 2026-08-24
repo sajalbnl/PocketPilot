@@ -37,13 +37,13 @@ export default function SignalInboxScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.eyebrow}>FINANCE AGENT · PAPER MODE</Text>
+          <Text style={styles.eyebrow}>FINANCE AGENT · HISTORICAL REPLAY</Text>
           <Text style={styles.title}>Signal inbox</Text>
           <Text style={styles.subtitle}>Evidence first. Execution only after approval.</Text>
         </View>
         <View style={styles.livePill}>
           <View style={styles.liveDot} />
-          <Text style={styles.liveText}>SEEDED</Text>
+          <Text style={styles.liveText}>REPLAY</Text>
         </View>
       </View>
 

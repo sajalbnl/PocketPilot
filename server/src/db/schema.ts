@@ -87,6 +87,9 @@ export const signals = pgTable(
     side: tradeSideEnum('side'),
     state: signalStateEnum('state').notNull().default('DETECTED'),
     dataMode: dataModeEnum('data_mode').notNull(),
+    skillId: text('skill_id').notNull().default('cross-market-catalyst'),
+    skillVersion: integer('skill_version').notNull().default(1),
+    candidateKey: text('candidate_key'),
     marketSnapshot: jsonb('market_snapshot').$type<SignalEvidence | null>(),
     triggeredRules: jsonb('triggered_rules').$type<string[]>().notNull().default([]),
     llmOutput: jsonb('llm_output').$type<LlmDecisionOutput | null>(),
@@ -109,6 +112,8 @@ export const signals = pgTable(
   (table) => [
     index('signals_mandate_id_idx').on(table.mandateId),
     index('signals_state_idx').on(table.state),
+    uniqueIndex('signals_candidate_key_uidx').on(table.candidateKey),
+    check('signals_skill_version_positive', sql`${table.skillVersion} > 0`),
     check('signals_timeline_is_array', sql`jsonb_typeof(${table.timeline}) = 'array'`),
     check('signals_triggered_rules_is_array', sql`jsonb_typeof(${table.triggeredRules}) = 'array'`),
   ],

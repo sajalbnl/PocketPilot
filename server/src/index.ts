@@ -3,8 +3,13 @@ import { createServer } from 'node:http';
 import { env } from './config/env.js';
 import { closeDatabase } from './db/client.js';
 import { createApp } from './http/app.js';
+import { createReplayController } from './replay/runtime.js';
+import { loadInvestorSkill } from './skill/loader.js';
 
-const server = createServer(createApp());
+const investorSkill = await loadInvestorSkill();
+const replayController =
+  env.DATA_MODE === 'replay' ? await createReplayController(investorSkill) : undefined;
+const server = createServer(createApp(undefined, undefined, replayController));
 let shuttingDown = false;
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {

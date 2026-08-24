@@ -15,6 +15,28 @@ export const SignalEvidenceSchema = z
     capturedAt: UtcDateTimeSchema,
     hyperliquid: z.array(HyperliquidMarketSampleSchema).min(1),
     polymarket: z.array(PolymarketMarketSampleSchema).min(1),
+    featureSnapshot: z
+      .object({
+        asOf: UtcDateTimeSchema,
+        windowStart: UtcDateTimeSchema,
+        windowId: z.string().min(1),
+        values: z.record(z.string(), z.number().finite().nullable()),
+        missingFeatures: z.array(z.string().min(1)),
+        ruleEvaluations: z.array(
+          z
+            .object({
+              ruleId: z.string().min(1),
+              feature: z.string().min(1),
+              operator: z.enum(['gte', 'lte', 'eq']),
+              threshold: z.number().finite(),
+              actual: z.number().finite().nullable(),
+              passed: z.boolean(),
+            })
+            .strict(),
+        ),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type SignalEvidence = z.infer<typeof SignalEvidenceSchema>;
@@ -93,6 +115,8 @@ export const SignalListItemSchema = z
     side: TradeSideSchema.nullable(),
     state: SignalStateSchema,
     dataMode: DataModeSchema,
+    skillId: z.string().min(1),
+    skillVersion: z.number().int().positive(),
     category: SignalCategorySchema,
     title: z.string().min(1).nullable(),
     thesis: z.string().min(1).nullable(),

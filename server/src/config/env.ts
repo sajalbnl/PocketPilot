@@ -18,6 +18,7 @@ const EnvironmentSchema = z.object({
   APP_BASE_URL: z.string().url().default('http://localhost:3000'),
   DATA_MODE: DataModeSchema.default('replay'),
   EXECUTION_MODE: ExecutionModeSchema.default('paper'),
+  REPLAY_SPEED: z.coerce.number().finite().nonnegative().default(1_000),
 });
 
 const parsedEnvironment = EnvironmentSchema.safeParse(process.env);

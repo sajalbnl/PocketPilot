@@ -14,11 +14,15 @@ import { getCurrentMandate } from '../db/mandate-repository.js';
 import { getSignal, listSignals } from '../db/signal-repository.js';
 import { ApprovalStubService, SignalActionError } from '../domain/approval-stub-service.js';
 import { HealthService } from '../domain/health-service.js';
+import type { ReplayController } from '../replay/controller.js';
+import { replayFixtureNames } from '../replay/fixture-source.js';
 import { errorHandler, HttpError, notFoundHandler } from './errors.js';
+import { z } from 'zod';
 
 export function createApp(
   healthService = new HealthService(),
   approvalService = new ApprovalStubService(),
+  replayController?: ReplayController,
 ): express.Express {
   const app = express();
 
@@ -108,6 +112,62 @@ export function createApp(
       next(toHttpError(error));
     }
   });
+
+  if (replayController && env.NODE_ENV !== 'production') {
+    const StartReplaySchema = z
+      .object({
+        fixture: z.enum(replayFixtureNames).default('btc-trigger'),
+        speed: z.number().finite().nonnegative().default(env.REPLAY_SPEED),
+        stepOnly: z.boolean().default(false),
+      })
+      .strict();
+
+    app.post('/dev/replay/start', async (request, response, next) => {
+      try {
+        response.json(await replayController.start(StartReplaySchema.parse(request.body ?? {})));
+      } catch (error: unknown) {
+        next(
+          new HttpError(
+            409,
+            'REPLAY_START_FAILED',
+            error instanceof Error ? error.message : String(error),
+          ),
+        );
+      }
+    });
+
+    app.post('/dev/replay/step', async (_request, response, next) => {
+      try {
+        response.json(await replayController.step());
+      } catch (error: unknown) {
+        next(
+          new HttpError(
+            409,
+            'REPLAY_STEP_FAILED',
+            error instanceof Error ? error.message : String(error),
+          ),
+        );
+      }
+    });
+
+    app.post('/dev/replay/reset', async (_request, response, next) => {
+      try {
+        response.json(await replayController.reset());
+      } catch (error: unknown) {
+        next(
+          new HttpError(
+            409,
+            'REPLAY_RESET_FAILED',
+            error instanceof Error ? error.message : String(error),
+          ),
+        );
+      }
+    });
+
+    app.get('/dev/replay/status', (_request, response) => {
+      response.json(replayController.status());
+    });
+  }
 
   app.use(notFoundHandler);
   app.use(errorHandler);
