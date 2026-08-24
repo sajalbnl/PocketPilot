@@ -1,0 +1,35 @@
+{
+  "name": "pocketpilot",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "app",
+    "server",
+    "shared"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "npm run build -w @pocketpilot/shared && npm run build -w @pocketpilot/server",
+    "typecheck": "npm run build -w @pocketpilot/shared && npm run typecheck -w @pocketpilot/server && npm run typecheck -w @pocketpilot/app",
+    "lint": "eslint app/src server/src shared/src shared/test --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "npm run test -w @pocketpilot/shared",
+    "dev:server": "npm run build -w @pocketpilot/shared && npm run dev -w @pocketpilot/server",
+    "dev:app": "npm run build -w @pocketpilot/shared && npm run start -w @pocketpilot/app",
+    "android": "npm run build -w @pocketpilot/shared && npm run android -w @pocketpilot/app",
+    "db:generate": "npm run db:generate -w @pocketpilot/server",
+    "db:migrate": "npm run db:migrate -w @pocketpilot/server",
+    "db:seed": "npm run db:seed -w @pocketpilot/server"
+  },
+  "devDependencies": {
+    "@eslint/js": "latest",
+    "eslint": "latest",
+    "globals": "latest",
+    "prettier": "latest",
+    "typescript": "latest",
+    "typescript-eslint": "latest"
+  }
+}

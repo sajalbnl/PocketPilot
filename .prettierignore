@@ -1,0 +1,11 @@
+node_modules
+dist
+coverage
+.expo
+app/.expo
+app/assets
+package-lock.json
+server/drizzle/meta
+00-POCKETPILOT-IDEA.md
+01-POCKETPILOT-PRD.md
+02-POCKETPILOT-PHASE-PROMPTS.md

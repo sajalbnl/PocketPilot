@@ -1,0 +1,25 @@
+node_modules/
+dist/
+coverage/
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+
+# Expo local state and native generation output
+.expo/
+app/.expo/
+app/android/
+app/ios/
+app/expo-env.d.ts
+
+# Editor-local files
+.idea/
+*.swp
+
+
+#docs
+00-POCKETPILOT-IDEA.md
+01-POCKETPILOT-PRD.md
+02-POCKETPILOT-PHASE-PROMPTS.md
