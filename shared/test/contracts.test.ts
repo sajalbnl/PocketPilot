@@ -6,6 +6,7 @@ import {
   LlmReasoningProposalSchema,
   MandateSchema,
   PolymarketMarketSampleSchema,
+  SignalListItemSchema,
 } from '../src/index.js';
 
 const now = '2026-08-24T08:30:00.000Z';
@@ -86,6 +87,7 @@ describe('shared contracts', () => {
       confidence: 0.72,
       proposedTrade: {
         side: 'LONG',
+        entryPrice: 64180,
         notionalUsd: 100,
         leverage: 2,
         stopLossPrice: 62500,
@@ -105,5 +107,26 @@ describe('shared contracts', () => {
         stopLossPrice: 62500,
       }).success,
     ).toBe(false);
+  });
+
+  it('requires confidence and a concise thesis on inbox items', () => {
+    expect(
+      SignalListItemSchema.safeParse({
+        id: '20000000-0000-4000-8000-000000000001',
+        symbol: 'BTC',
+        side: 'LONG',
+        state: 'PENDING_APPROVAL',
+        dataMode: 'replay',
+        category: 'approval-required',
+        title: 'BTC catalyst',
+        thesis: 'Perpetual demand and prediction odds are repricing together.',
+        confidence: 0.78,
+        proposedNotionalUsd: 100,
+        proposedLeverage: 2,
+        expiresAt: '2026-08-24T08:40:00.000Z',
+        createdAt: now,
+        updatedAt: now,
+      }).success,
+    ).toBe(true);
   });
 });

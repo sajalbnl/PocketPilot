@@ -1,4 +1,5 @@
 import type { SignalState } from './enums.js';
+import type { SignalCategory } from './signal.js';
 
 export const signalTransitionMap = {
   DETECTED: ['ANALYZING', 'EXPIRED'],
@@ -38,4 +39,23 @@ export function transitionSignalState(fromState: SignalState, toState: SignalSta
   }
 
   return toState;
+}
+
+const signalCategoryStates = {
+  'approval-required': ['PENDING_APPROVAL'],
+  monitoring: ['DETECTED', 'ANALYZING', 'PROPOSED', 'APPROVED', 'EXECUTING'],
+  executed: ['FILLED', 'CLOSED'],
+  expired: ['NO_TRADE', 'REJECTED', 'RISK_BLOCKED', 'EXPIRED', 'EXECUTION_FAILED'],
+} as const satisfies Record<SignalCategory, readonly SignalState[]>;
+
+export function getSignalCategory(state: SignalState): SignalCategory {
+  for (const category of Object.keys(signalCategoryStates) as SignalCategory[]) {
+    if ((signalCategoryStates[category] as readonly SignalState[]).includes(state)) return category;
+  }
+
+  return 'monitoring';
+}
+
+export function getSignalStatesForCategory(category: SignalCategory): readonly SignalState[] {
+  return signalCategoryStates[category];
 }

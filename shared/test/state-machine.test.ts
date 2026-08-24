@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   canTransitionSignal,
+  getSignalCategory,
   IllegalSignalTransitionError,
   transitionSignalState,
 } from '../src/index.js';
@@ -22,5 +23,12 @@ describe('signal state machine', () => {
       'Signal cannot transition from REJECTED to PENDING_APPROVAL',
     );
     expect(() => transitionSignalState('CLOSED', 'FILLED')).toThrow(IllegalSignalTransitionError);
+  });
+
+  it('maps every lifecycle state into an inbox category', () => {
+    expect(getSignalCategory('PENDING_APPROVAL')).toBe('approval-required');
+    expect(getSignalCategory('ANALYZING')).toBe('monitoring');
+    expect(getSignalCategory('FILLED')).toBe('executed');
+    expect(getSignalCategory('REJECTED')).toBe('expired');
   });
 });

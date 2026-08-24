@@ -1,4 +1,4 @@
-# Phase 1 architecture
+# Phase 2 architecture
 
 ## Trust boundaries
 
@@ -32,3 +32,23 @@ PostgreSQL numerics; shared API contracts expose finite JavaScript numbers for t
 `DATA_MODE` is validated as `replay` or `live`. `EXECUTION_MODE` is validated as `paper` or
 `hyperliquid-testnet`. In Phase 1 these select no adapters yet; they establish explicit startup
 configuration for later phases. Replay and paper are the defaults and guaranteed demo path.
+
+## Phase 2 product loop
+
+The Expo app uses one typed REST client. Important responses are parsed with shared Zod schemas
+before TanStack Query can cache them. Inbox category queries poll only for approval/monitoring
+states; detail polling stops for inactive states. Mutations never edit cached signal objects. They
+invalidate list/detail keys and reconcile with the authoritative API response.
+
+`ApprovalStubService` is the deliberate boundary for this phase. It validates the shared request,
+expiry, current state, and the mandate's obvious notional/leverage bounds, then uses the central
+transition helper to persist `APPROVED` or `REJECTED`. It creates no order and performs no market,
+LLM, real risk-engine, or execution work. This lets Phase 4/5 replace the service behavior without
+changing the mobile screens or REST contracts.
+
+The four inbox categories are projections of lifecycle state, not extra persisted state:
+
+- Approval Required: `PENDING_APPROVAL`
+- Monitoring: `DETECTED`, `ANALYZING`, `PROPOSED`, `APPROVED`, `EXECUTING`
+- Executed: `FILLED`, `CLOSED`
+- Expired: terminal inactive outcomes, including `EXPIRED` and `REJECTED`

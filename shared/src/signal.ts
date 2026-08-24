@@ -22,6 +22,7 @@ export type SignalEvidence = z.infer<typeof SignalEvidenceSchema>;
 export const ProposedTradeSchema = z
   .object({
     side: TradeSideSchema,
+    entryPrice: PriceSchema,
     notionalUsd: PositiveMoneySchema,
     leverage: z.number().finite().positive(),
     stopLossPrice: PriceSchema,
@@ -81,6 +82,10 @@ export const RiskPreviewSchema = z
   .strict();
 export type RiskPreview = z.infer<typeof RiskPreviewSchema>;
 
+export const signalCategories = ['approval-required', 'monitoring', 'executed', 'expired'] as const;
+export const SignalCategorySchema = z.enum(signalCategories);
+export type SignalCategory = z.infer<typeof SignalCategorySchema>;
+
 export const SignalListItemSchema = z
   .object({
     id: UuidSchema,
@@ -88,7 +93,10 @@ export const SignalListItemSchema = z
     side: TradeSideSchema.nullable(),
     state: SignalStateSchema,
     dataMode: DataModeSchema,
+    category: SignalCategorySchema,
     title: z.string().min(1).nullable(),
+    thesis: z.string().min(1).nullable(),
+    confidence: z.number().finite().min(0).max(1).nullable(),
     proposedNotionalUsd: PositiveMoneySchema.nullable(),
     proposedLeverage: z.number().finite().positive().nullable(),
     expiresAt: UtcDateTimeSchema.nullable(),
@@ -108,3 +116,28 @@ export const SignalDetailSchema = SignalListItemSchema.extend({
   timeline: z.array(SignalTimelineEntrySchema),
 }).strict();
 export type SignalDetail = z.infer<typeof SignalDetailSchema>;
+
+export const SignalListQuerySchema = z
+  .object({
+    state: SignalStateSchema.optional(),
+    category: SignalCategorySchema.optional(),
+  })
+  .strict();
+export type SignalListQuery = z.infer<typeof SignalListQuerySchema>;
+
+export const SignalListResponseSchema = z
+  .object({
+    signals: z.array(SignalListItemSchema),
+    total: z.number().int().nonnegative(),
+  })
+  .strict();
+export type SignalListResponse = z.infer<typeof SignalListResponseSchema>;
+
+export const SignalActionResultSchema = z
+  .object({
+    signal: SignalDetailSchema,
+    executionDeferred: z.literal(true),
+    message: z.string().min(1),
+  })
+  .strict();
+export type SignalActionResult = z.infer<typeof SignalActionResultSchema>;
