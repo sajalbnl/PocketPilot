@@ -1,6 +1,14 @@
 import { z } from 'zod';
 
-import { AssetSchema, DataModeSchema, SignalStateSchema, TradeSideSchema } from './enums.js';
+import {
+  AssetSchema,
+  DataModeSchema,
+  ExecutionVenueSchema,
+  RiskCodeSchema,
+  SignalStateSchema,
+  TradeSideSchema,
+} from './enums.js';
+import { CompactErrorSchema } from './execution.js';
 import { HyperliquidMarketSampleSchema, PolymarketMarketSampleSchema } from './market.js';
 import {
   FlatMetadataSchema,
@@ -41,48 +49,65 @@ export const SignalEvidenceSchema = z
   .strict();
 export type SignalEvidence = z.infer<typeof SignalEvidenceSchema>;
 
-export const ProposedTradeSchema = z
-  .object({
-    side: TradeSideSchema,
-    entryPrice: PriceSchema,
-    notionalUsd: PositiveMoneySchema,
-    leverage: z.number().finite().positive(),
-    stopLossPrice: PriceSchema,
-    expiresAt: UtcDateTimeSchema,
-  })
-  .strict();
-
-export const LlmReasoningProposalSchema = z
+export const AgentDecisionSchema = z
   .object({
     schemaVersion: z.literal(1),
-    decision: z.enum(['PROPOSE_LONG', 'PROPOSE_SHORT']),
-    title: z.string().min(1).max(160),
-    thesis: z.string().min(1),
-    whyNow: z.array(z.string().min(1)).min(1),
+    decision: z.enum(['PROPOSE', 'NO_TRADE']),
+    asset: AssetSchema,
+    direction: TradeSideSchema,
+    venue: ExecutionVenueSchema,
+    thesis: z.string().min(10).max(500),
+    whyNow: z.array(z.string().min(1).max(240)).min(1).max(5),
     evidenceReferences: z.array(z.string().min(1)).min(1),
-    uncertainty: z.array(z.string().min(1)).min(1),
-    invalidation: z.array(z.string().min(1)).min(1),
+    counterEvidence: z.array(z.string().min(1).max(240)).min(1).max(5),
     confidence: z.number().finite().min(0).max(1),
-    proposedTrade: ProposedTradeSchema,
+    proposedNotionalUsd: PositiveMoneySchema.nullable(),
+    leverage: z.number().finite().positive().nullable(),
+    entryReference: PriceSchema.nullable(),
+    stopLoss: PriceSchema.nullable(),
+    invalidationConditions: z.array(z.string().min(1).max(240)).min(1).max(5),
+    expiryMinutes: z.number().int().min(1).max(60).nullable(),
   })
-  .strict();
-export type LlmReasoningProposal = z.infer<typeof LlmReasoningProposalSchema>;
+  .strict()
+  .superRefine((decision, context) => {
+    const parameterNames = [
+      'proposedNotionalUsd',
+      'leverage',
+      'entryReference',
+      'stopLoss',
+      'expiryMinutes',
+    ] as const;
+    const shouldBePresent = decision.decision === 'PROPOSE';
+    for (const name of parameterNames) {
+      if ((decision[name] !== null) !== shouldBePresent) {
+        context.addIssue({
+          code: 'custom',
+          path: [name],
+          message: shouldBePresent
+            ? 'is required for a PROPOSE decision'
+            : 'must be null for a NO_TRADE decision',
+        });
+      }
+    }
+  });
+export type AgentDecision = z.infer<typeof AgentDecisionSchema>;
 
-export const LlmNoTradeDecisionSchema = z
+/** @deprecated Use AgentDecisionSchema. */
+export const LlmDecisionOutputSchema = AgentDecisionSchema;
+/** @deprecated Use AgentDecision. */
+export type LlmDecisionOutput = AgentDecision;
+
+export const ReasoningMetadataSchema = z
   .object({
-    schemaVersion: z.literal(1),
-    decision: z.enum(['WATCH', 'NO_TRADE']),
-    summary: z.string().min(1),
-    evidenceReferences: z.array(z.string().min(1)),
-    uncertainty: z.array(z.string().min(1)).min(1),
+    provider: z.string().min(1),
+    model: z.string().min(1),
+    promptVersion: z.string().min(1),
+    attempts: z.number().int().min(1).max(2),
+    generatedAt: UtcDateTimeSchema,
+    providerResponseId: z.string().min(1).nullable(),
   })
   .strict();
-
-export const LlmDecisionOutputSchema = z.discriminatedUnion('decision', [
-  LlmReasoningProposalSchema,
-  LlmNoTradeDecisionSchema,
-]);
-export type LlmDecisionOutput = z.infer<typeof LlmDecisionOutputSchema>;
+export type ReasoningMetadata = z.infer<typeof ReasoningMetadataSchema>;
 
 export const SignalTimelineEntrySchema = z
   .object({
@@ -95,11 +120,26 @@ export const SignalTimelineEntrySchema = z
   .strict();
 export type SignalTimelineEntry = z.infer<typeof SignalTimelineEntrySchema>;
 
+const JsonRiskValueSchema = z.union([z.string(), z.number().finite(), z.boolean(), z.null()]);
+
+export const RiskRuleResultSchema = z
+  .object({
+    ruleId: z.string().min(1),
+    code: RiskCodeSchema,
+    passed: z.boolean(),
+    actual: JsonRiskValueSchema,
+    limit: JsonRiskValueSchema,
+    explanation: z.string().min(1),
+  })
+  .strict();
+export type RiskRuleResult = z.infer<typeof RiskRuleResultSchema>;
+
 export const RiskPreviewSchema = z
   .object({
     allowed: z.boolean(),
+    phase: z.enum(['PRELIMINARY', 'APPROVAL']),
     checkedAt: UtcDateTimeSchema,
-    messages: z.array(z.string()),
+    rules: z.array(RiskRuleResultSchema).min(1),
   })
   .strict();
 export type RiskPreview = z.infer<typeof RiskPreviewSchema>;
@@ -134,7 +174,9 @@ export const SignalDetailSchema = SignalListItemSchema.extend({
   mandateId: UuidSchema,
   evidence: SignalEvidenceSchema.nullable(),
   triggeredRules: z.array(z.string().min(1)),
-  llmOutput: LlmDecisionOutputSchema.nullable(),
+  llmOutput: AgentDecisionSchema.nullable(),
+  llmMetadata: ReasoningMetadataSchema.nullable(),
+  reasoningError: CompactErrorSchema.nullable(),
   riskPreview: RiskPreviewSchema.nullable(),
   stopLossPrice: PriceSchema.nullable(),
   timeline: z.array(SignalTimelineEntrySchema),

@@ -42,10 +42,8 @@ export default function SignalDetailScreen() {
   }
 
   const signal = signalQuery.data;
-  const proposal =
-    signal.llmOutput?.decision === 'PROPOSE_LONG' || signal.llmOutput?.decision === 'PROPOSE_SHORT'
-      ? signal.llmOutput
-      : null;
+  const reasoning = signal.llmOutput;
+  const proposal = signal.llmOutput?.decision === 'PROPOSE' ? signal.llmOutput : null;
   const expiredByTime = signal.expiresAt
     ? new Date(signal.expiresAt).getTime() <= Date.now()
     : false;
@@ -98,20 +96,29 @@ export default function SignalDetailScreen() {
 
         <View style={[styles.boundaryCard, styles.reasoningCard]}>
           <Text style={[styles.boundaryLabel, styles.reasoningLabel]}>
-            {proposal
-              ? 'AGENT REASONING · PHASE 2 SEED'
+            {reasoning
+              ? `AI REASONING · ${signal.llmMetadata?.model ?? 'VALIDATED MODEL'}`
               : `DETERMINISTIC DETECTION · SKILL v${signal.skillVersion}`}
           </Text>
           <Text style={styles.boundaryTitle}>
-            {proposal ? 'Interpretation, not authorization' : signal.skillId}
+            {reasoning ? 'Interpretation, not authorization' : signal.skillId}
           </Text>
           <Text style={styles.body}>
-            {proposal?.thesis ?? signal.thesis ?? 'Analysis is still being assembled.'}
+            {reasoning?.thesis ?? signal.thesis ?? 'Analysis is still being assembled.'}
           </Text>
         </View>
 
+        {signal.reasoningError ? (
+          <View style={[styles.boundaryCard, styles.errorBoundaryCard]}>
+            <Text style={[styles.boundaryLabel, styles.errorBoundaryLabel]}>
+              REASONING CLOSED SAFELY · {signal.reasoningError.code}
+            </Text>
+            <Text style={styles.body}>{signal.reasoningError.message}</Text>
+          </View>
+        ) : null}
+
         <Section title="Why now">
-          {proposal?.whyNow.map((item) => (
+          {reasoning?.whyNow.map((item) => (
             <Bullet key={item} text={item} color={colors.amber} />
           )) ?? (
             <Text style={styles.body}>No why-now explanation is available for this state.</Text>
@@ -121,6 +128,9 @@ export default function SignalDetailScreen() {
         <Section title="Traceable evidence" subtitle="Captured snapshots from each source">
           {signal.evidence ? (
             <>
+              {reasoning?.evidenceReferences.map((reference) => (
+                <Bullet key={reference} text={`AI cited ${reference}`} color={colors.amber} />
+              ))}
               {signal.evidence.hyperliquid.map((sample) => (
                 <View key={sample.sampleId} style={styles.evidenceCard}>
                   <SourceHeader color={colors.mint} label="HYPERLIQUID" />
@@ -182,23 +192,32 @@ export default function SignalDetailScreen() {
           </Text>
           <Text style={styles.boundaryTitle}>
             {signal.riskPreview?.allowed
-              ? 'Seeded policy preview passed'
-              : 'Not yet policy checked'}
+              ? 'Deterministic policy passed'
+              : signal.riskPreview
+                ? 'Deterministic policy blocked this attempt'
+                : 'Not yet policy checked'}
           </Text>
-          {signal.riskPreview?.messages.map((message) => (
-            <Bullet key={message} text={message} color={colors.blue} />
-          )) ?? <Text style={styles.body}>A real risk evaluation arrives in Phase 4.</Text>}
+          {signal.riskPreview?.rules.map((rule) => (
+            <View key={rule.ruleId} style={styles.riskRuleRow}>
+              <Text style={[styles.riskRuleStatus, !rule.passed && styles.riskRuleFailed]}>
+                {rule.passed ? 'PASS' : 'FAIL'}
+              </Text>
+              <View style={styles.riskRuleCopy}>
+                <Text style={styles.riskRuleId}>{rule.ruleId.replaceAll('-', ' ')}</Text>
+                <Text style={styles.riskRuleExplanation}>{rule.explanation}</Text>
+              </View>
+            </View>
+          )) ?? <Text style={styles.body}>Policy evaluation has not run for this state.</Text>}
           <Text style={styles.previewNotice}>
-            Final server-side risk evaluation is not implemented in Phase 2.
+            {signal.riskPreview
+              ? `${signal.riskPreview.phase.toLowerCase()} check · ${formatDateTime(signal.riskPreview.checkedAt)}`
+              : 'The server reruns these rules against edited values at approval time.'}
           </Text>
         </View>
 
         <Section title="Proposal terms">
           <View style={styles.termsCard}>
-            <Term
-              label="Entry reference"
-              value={formatUsd(proposal?.proposedTrade.entryPrice ?? null, 2)}
-            />
+            <Term label="Entry reference" value={formatUsd(proposal?.entryReference ?? null, 2)} />
             <Term label="Notional" value={formatUsd(signal.proposedNotionalUsd)} />
             <Term
               label="Leverage"
@@ -210,10 +229,10 @@ export default function SignalDetailScreen() {
         </Section>
 
         <Section title="Invalidation & uncertainty">
-          {proposal?.invalidation.map((item) => (
+          {reasoning?.invalidationConditions.map((item) => (
             <Bullet key={item} text={item} color={colors.red} />
           ))}
-          {proposal?.uncertainty.map((item) => (
+          {reasoning?.counterEvidence.map((item) => (
             <Bullet key={item} text={item} color={colors.textDim} />
           ))}
         </Section>
@@ -300,7 +319,7 @@ function inactiveReason(signal: SignalDetail, expiredByTime: boolean): string {
   if (signal.state === 'FILLED' || signal.state === 'CLOSED')
     return 'This signal has already executed.';
   if (signal.state === 'APPROVED' || signal.state === 'EXECUTING')
-    return 'Approval is recorded; Phase 2 intentionally defers execution.';
+    return 'Approval passed current policy; Phase 5 will own idempotent execution.';
   return `This signal is ${signal.state.toLowerCase().replaceAll('_', ' ')} and is not approvable.`;
 }
 
@@ -463,6 +482,8 @@ const styles = StyleSheet.create({
   heroMetricValue: { color: colors.text, fontSize: 16, fontWeight: '800' },
   boundaryCard: { borderRadius: radii.large, borderWidth: 1, marginTop: 24, padding: 18 },
   reasoningCard: { backgroundColor: colors.amberDark, borderColor: '#665126' },
+  errorBoundaryCard: { backgroundColor: colors.redDark, borderColor: '#693638' },
+  errorBoundaryLabel: { color: colors.red, marginBottom: 8 },
   riskCard: { backgroundColor: colors.blueDark, borderColor: '#2C5275' },
   boundaryLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 0.9 },
   reasoningLabel: { color: colors.amber },
@@ -485,6 +506,12 @@ const styles = StyleSheet.create({
     marginTop: 13,
     paddingTop: 11,
   },
+  riskRuleRow: { alignItems: 'flex-start', flexDirection: 'row', gap: 10, marginTop: 10 },
+  riskRuleStatus: { color: colors.mint, fontSize: 10, fontWeight: '900', width: 32 },
+  riskRuleFailed: { color: colors.red },
+  riskRuleCopy: { flex: 1 },
+  riskRuleId: { color: colors.text, fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
+  riskRuleExplanation: { color: colors.textMuted, fontSize: 12, lineHeight: 18, marginTop: 2 },
   section: { marginTop: 29 },
   sectionTitle: { color: colors.text, fontSize: 19, fontWeight: '800', letterSpacing: -0.2 },
   sectionSubtitle: { color: colors.textDim, fontSize: 11, marginTop: 4 },

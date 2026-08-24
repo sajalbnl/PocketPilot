@@ -1,10 +1,10 @@
-# Phase 3 architecture
+# Phase 4 architecture
 
 ## Trust boundaries
 
 `shared/` contains the framework-independent runtime contracts and the only signal transition map.
 The app and server consume its compiled package. The server is authoritative for persistence and
-will own risk and execution in later phases; the mobile app never directly changes lifecycle state.
+risk; the mobile app never directly changes lifecycle state. Execution remains deferred to Phase 5.
 
 The server's domain transition helper validates a transition first and returns a new timeline array.
 Callers persist that array as one JSONB value. Existing entries are never edited or removed, making
@@ -52,11 +52,27 @@ before TanStack Query can cache them. Inbox category queries poll only for appro
 states; detail polling stops for inactive states. Mutations never edit cached signal objects. They
 invalidate list/detail keys and reconcile with the authoritative API response.
 
-`ApprovalStubService` is the deliberate boundary for this phase. It validates the shared request,
-expiry, current state, and the mandate's obvious notional/leverage bounds, then uses the central
-transition helper to persist `APPROVED` or `REJECTED`. It creates no order and performs no market,
-LLM, real risk-engine, or execution work. This lets Phase 4/5 replace the service behavior without
-changing the mobile screens or REST contracts.
+## Reasoning boundary
+
+`pocketpilot-reasoning-v1` sends only skill identity/instructions, normalized features, triggered
+rules, bounded evidence with stable IDs/timestamps, and non-secret mandate context. Provider text
+must pass the single strict `AgentDecisionSchema`. Domain validation also enforces candidate
+identity, mandate allowlists, grounded evidence IDs, and expiry bounds. Malformed output receives
+one controlled repair attempt; a second failure records a compact error and closes as `NO_TRADE`.
+The model has no approval, transition, signing, order, or execution capability.
+
+Fixture mode emits deterministic schema-valid output. OpenAI mode uses the Responses API with a
+strict JSON Schema response format, bounded timeout, and at most one transient retry. Provider
+payloads and API keys are never logged.
+
+## Deterministic risk boundary
+
+The pure policy engine evaluates asset, venue, notional, leverage, required directional stop,
+daily realized loss, kill switch, explicit approval, and expiry. Every result has a stable rule ID,
+pass/fail, actual value, limit, and explanation. Preliminary failure moves `PROPOSED` to
+`RISK_BLOCKED`; a passing preview moves it to `PENDING_APPROVAL`. Approval reruns policy with edited
+values, the current mandate/loss/kill-switch/time, never the stored preview. A rejected edit remains
+pending so `$150` can be corrected to `$100`; expiry transitions it to `EXPIRED`.
 
 The four inbox categories are projections of lifecycle state, not extra persisted state:
 

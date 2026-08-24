@@ -19,15 +19,15 @@ function proposalFields(row: SignalRow): {
   thesis: string | null;
   confidence: number | null;
 } {
-  if (row.llmOutput?.decision === 'PROPOSE_LONG' || row.llmOutput?.decision === 'PROPOSE_SHORT') {
+  if (row.llmOutput?.decision === 'PROPOSE') {
     return {
-      title: row.llmOutput.title,
+      title: `${row.symbol} evidence-bound proposal`,
       thesis: row.llmOutput.thesis,
       confidence: row.llmOutput.confidence,
     };
   }
 
-  const summary = row.llmOutput && 'summary' in row.llmOutput ? row.llmOutput.summary : null;
+  const summary = row.llmOutput?.thesis ?? null;
   if (row.candidateKey) {
     return {
       title: `${row.symbol} cross-market catalyst detected`,
@@ -64,6 +64,8 @@ export function mapSignalDetail(row: SignalRow): SignalDetail {
     evidence: row.marketSnapshot,
     triggeredRules: row.triggeredRules,
     llmOutput: row.llmOutput,
+    llmMetadata: row.llmMetadata,
+    reasoningError: row.reasoningError,
     riskPreview: row.riskPreview,
     stopLossPrice: row.stopLossPrice,
     timeline: row.timeline,
@@ -89,6 +91,8 @@ export async function listSignals(query: SignalListQuery): Promise<SignalListRes
       evidence: _evidence,
       triggeredRules: _triggeredRules,
       llmOutput: _llmOutput,
+      llmMetadata: _llmMetadata,
+      reasoningError: _reasoningError,
       riskPreview: _riskPreview,
       stopLossPrice: _stopLossPrice,
       timeline: _timeline,
@@ -98,6 +102,8 @@ export async function listSignals(query: SignalListQuery): Promise<SignalListRes
     void _evidence;
     void _triggeredRules;
     void _llmOutput;
+    void _llmMetadata;
+    void _reasoningError;
     void _riskPreview;
     void _stopLossPrice;
     void _timeline;

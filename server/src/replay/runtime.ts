@@ -2,10 +2,13 @@ import { getCurrentMandate } from '../db/mandate-repository.js';
 import { persistCandidate, resetReplayCandidates } from '../db/candidate-repository.js';
 import { loadInvestorSkill } from '../skill/loader.js';
 import type { InvestorSkill } from '../skill/schema.js';
+import { createReasoningProvider } from '../reasoning/factory.js';
+import { SignalReasoningService } from '../reasoning/service.js';
 import { ReplayController } from './controller.js';
 
 export async function createReplayController(
   loadedSkill?: InvestorSkill,
+  reasoningService = new SignalReasoningService(createReasoningProvider()),
 ): Promise<ReplayController> {
   const skill = loadedSkill ?? (await loadInvestorSkill());
   const mandate = await getCurrentMandate();
@@ -19,7 +22,13 @@ export async function createReplayController(
   }
   return new ReplayController(
     skill,
-    { persist: (candidate) => persistCandidate(mandate.id, candidate) },
+    {
+      persist: async (candidate) => {
+        const persisted = await persistCandidate(mandate.id, candidate);
+        if (persisted.created) await reasoningService.analyze(persisted.signalId, skill);
+        return persisted;
+      },
+    },
     resetReplayCandidates,
   );
 }

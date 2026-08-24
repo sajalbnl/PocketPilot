@@ -1,10 +1,9 @@
 # pocketpilot
 
-pocketpilot is an Android-first control surface for a finance agent. Phase 3 provides a deterministic
-Replay Mode: realistic Hyperliquid and Polymarket payloads pass through normalized contracts,
-event-time feature calculation, a strict YAML Investor Skill, threshold evaluation, deduplication,
-and the existing persisted mobile signal flow. LLM reasoning, real risk evaluation, notifications,
-orders, and execution remain later phases.
+pocketpilot is an Android-first control surface for a finance agent. Phase 4 carries deterministic
+Replay Mode candidates across a strict advisory LLM boundary, validates evidence-grounded output,
+and applies deterministic policy before and during mobile approval. Notifications, orders, and
+execution remain later phases.
 
 ## Prerequisites
 
@@ -22,17 +21,25 @@ cp app/.env.example app/.env
 
 The example environment uses local PostgreSQL and safe prototype modes:
 
-| Variable         | Allowed/example value                                       | Required                  |
-| ---------------- | ----------------------------------------------------------- | ------------------------- |
-| `DATABASE_URL`   | `postgresql://postgres:postgres@localhost:5432/pocketpilot` | yes                       |
-| `PORT`           | `3000`                                                      | defaults to `3000`        |
-| `APP_BASE_URL`   | `http://localhost:3000`                                     | defaults locally          |
-| `DATA_MODE`      | `replay` or `live`                                          | defaults to `replay`      |
-| `EXECUTION_MODE` | `paper` or `hyperliquid-testnet`                            | defaults to `paper`       |
-| `NODE_ENV`       | `development`, `test`, or `production`                      | defaults to `development` |
+| Variable          | Allowed/example value                                       | Required                  |
+| ----------------- | ----------------------------------------------------------- | ------------------------- |
+| `DATABASE_URL`    | `postgresql://postgres:postgres@localhost:5432/pocketpilot` | yes                       |
+| `PORT`            | `3000`                                                      | defaults to `3000`        |
+| `APP_BASE_URL`    | `http://localhost:3000`                                     | defaults locally          |
+| `DATA_MODE`       | `replay` or `live`                                          | defaults to `replay`      |
+| `EXECUTION_MODE`  | `paper` or `hyperliquid-testnet`                            | defaults to `paper`       |
+| `NODE_ENV`        | `development`, `test`, or `production`                      | defaults to `development` |
+| `LLM_PROVIDER`    | `fixture` or `openai`                                       | defaults to `fixture`     |
+| `LLM_MODEL`       | OpenAI model with Structured Outputs support                | `gpt-4.1-mini`            |
+| `OPENAI_API_KEY`  | Server-side OpenAI project API key                          | only for `openai`         |
+| `OPENAI_BASE_URL` | `https://api.openai.com/v1`                                 | defaults to official API  |
+| `LLM_TIMEOUT_MS`  | Provider request timeout                                    | defaults to `20000`       |
+| `LLM_MAX_RETRIES` | Transient provider retries, `0` or `1`                      | defaults to `1`           |
 
-Never commit `.env`; only `.env.example` files are tracked. Phase 2 needs no API keys beyond
-the PostgreSQL URL.
+Never commit `.env`; only `.env.example` files are tracked. `LLM_PROVIDER=fixture` is deterministic,
+offline, and recommended for replay/tests. For the real provider, create a project API key in the
+OpenAI Platform dashboard, store it only as the backend's `OPENAI_API_KEY`, and set
+`LLM_PROVIDER=openai`. Never put this key in the Expo environment.
 
 `app/.env` configures `EXPO_PUBLIC_API_URL`. Keep `http://10.0.2.2:3000` for the standard Android
 emulator. For a physical phone, replace `10.0.2.2` with the development computer's LAN IP; keep the
@@ -74,7 +81,7 @@ The endpoint returns HTTP 200 with `database: "up"` when PostgreSQL is reachable
 `database: "down"` otherwise. `GET /config` exposes the non-secret runtime modes and server time.
 Unknown routes and request failures use the shared JSON error shape.
 
-Signal and Phase 3 replay endpoints:
+Signal and Phase 4 replay endpoints:
 
 ```text
 GET  /mandate
@@ -89,8 +96,9 @@ GET  /dev/replay/status
 ```
 
 Valid categories are `approval-required`, `monitoring`, `executed`, and `expired`. Approval accepts
-`approvalRevision`, `notionalUsd`, `leverage`, and `stopLossPrice`. The Phase 2 stub persists the
-approval state and edited terms but explicitly defers order creation/execution.
+`approvalRevision`, `notionalUsd`, `leverage`, and `stopLossPrice`. Approval reruns current policy
+against edited terms and returns a typed policy preview on rejection. A passing request persists an
+`APPROVED` intent but explicitly defers order creation/execution to Phase 5.
 
 ## Replay demo
 
@@ -99,10 +107,11 @@ npm run replay:reset
 npm run replay -- --fixture btc-trigger --speed 0
 ```
 
-Open **Monitoring** in the mobile app and select the generated BTC signal. It exposes both source
-snapshots, every numeric feature, exact triggered rule IDs, skill ID/version, and the replay-time
-timeline. See `docs/replay-runbook.md` for speed, stepping, the no-trigger fixture, formulas, and
-expected output.
+Open **Approval Required** in the mobile app and select the generated BTC signal. It exposes source
+snapshots, grounded AI reasoning, numeric features, triggered rule IDs, individual deterministic
+risk checks, prompt/model metadata, and the timeline. Entering `$150` reaches the backend and fails
+`maximum-notional`; correcting it to `$100` passes policy and becomes ready for Phase 5. See
+`docs/replay-runbook.md` for speed, stepping, the no-trigger fixture, and formulas.
 
 ## Checks
 

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ApprovalRequestSchema,
   HyperliquidMarketSampleSchema,
-  LlmReasoningProposalSchema,
+  AgentDecisionSchema,
   MandateSchema,
   PolymarketMarketSampleSchema,
   SignalListItemSchema,
@@ -86,26 +86,25 @@ describe('shared contracts', () => {
   it('requires a complete structured proposal and strict approval values', () => {
     const proposal = {
       schemaVersion: 1,
-      decision: 'PROPOSE_LONG',
-      title: 'BTC cross-market catalyst',
+      decision: 'PROPOSE',
+      asset: 'BTC',
+      direction: 'LONG',
+      venue: 'hyperliquid',
       thesis: 'Prediction-market repricing confirms spot momentum.',
       whyNow: ['Volume is accelerating.'],
       evidenceReferences: ['hl-btc-1', 'market-1'],
-      uncertainty: ['The move can reverse.'],
-      invalidation: ['BTC trades below the stop.'],
+      counterEvidence: ['The move can reverse.'],
       confidence: 0.72,
-      proposedTrade: {
-        side: 'LONG',
-        entryPrice: 64180,
-        notionalUsd: 100,
-        leverage: 2,
-        stopLossPrice: 62500,
-        expiresAt: '2026-08-24T08:40:00.000Z',
-      },
+      proposedNotionalUsd: 100,
+      leverage: 2,
+      entryReference: 64180,
+      stopLoss: 62500,
+      invalidationConditions: ['BTC trades below the stop.'],
+      expiryMinutes: 10,
     };
 
-    expect(LlmReasoningProposalSchema.safeParse(proposal).success).toBe(true);
-    expect(LlmReasoningProposalSchema.safeParse({ ...proposal, invalidation: [] }).success).toBe(
+    expect(AgentDecisionSchema.safeParse(proposal).success).toBe(true);
+    expect(AgentDecisionSchema.safeParse({ ...proposal, invalidationConditions: [] }).success).toBe(
       false,
     );
     expect(

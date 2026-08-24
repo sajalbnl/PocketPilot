@@ -1,10 +1,12 @@
-import type { ApprovalRequest, RiskCode, SignalDetail } from '@pocketpilot/shared';
+import type { ApprovalRequest, RiskCode, RiskPreview, SignalDetail } from '@pocketpilot/shared';
 import { and, eq } from 'drizzle-orm';
 
 import { db } from '../db/client.js';
 import { getCurrentMandate } from '../db/mandate-repository.js';
+import { getDailyRealizedLossUsd } from '../db/risk-repository.js';
 import { getSignal, getSignalRow } from '../db/signal-repository.js';
 import { signals } from '../db/schema.js';
+import { evaluateRiskPolicy, firstFailedRiskRule } from '../risk/engine.js';
 import { appendSignalTransition } from './signal-transition-service.js';
 
 export class SignalActionError extends Error {
@@ -12,20 +14,21 @@ export class SignalActionError extends Error {
     readonly code: RiskCode | 'SIGNAL_NOT_FOUND' | 'MANDATE_NOT_FOUND' | 'ACTION_CONFLICT',
     message: string,
     readonly field?: string,
+    readonly risk?: RiskPreview,
   ) {
     super(message);
     this.name = 'SignalActionError';
   }
 }
 
-/**
- * Phase 2 persistence stub. It enforces request shape, obvious mandate bounds, expiry, and the
- * central state machine, then persists the intent. It deliberately creates no order and performs
- * no real risk evaluation or execution; those remain Phase 4/5 boundaries.
- */
-export class ApprovalStubService {
+export class ApprovalService {
   async approve(signalId: string, request: ApprovalRequest): Promise<SignalDetail> {
-    const [signal, mandate] = await Promise.all([getSignalRow(signalId), getCurrentMandate()]);
+    const now = new Date();
+    const [signal, mandate, dailyRealizedLossUsd] = await Promise.all([
+      getSignalRow(signalId),
+      getCurrentMandate(),
+      getDailyRealizedLossUsd(now),
+    ]);
     if (!signal) throw new SignalActionError('SIGNAL_NOT_FOUND', 'Signal was not found');
     if (!mandate) throw new SignalActionError('MANDATE_NOT_FOUND', 'Current mandate was not found');
     if (signal.state !== 'PENDING_APPROVAL') {
@@ -34,51 +37,69 @@ export class ApprovalStubService {
         `A ${signal.state.toLowerCase()} signal cannot be approved`,
       );
     }
+    if (signal.llmOutput?.decision !== 'PROPOSE' || signal.llmOutput.entryReference === null) {
+      throw new SignalActionError(
+        'INVALID_SIGNAL_STATE',
+        'This signal has no validated advisory proposal',
+      );
+    }
 
-    if (!signal.expiresAt || signal.expiresAt.getTime() <= Date.now()) {
-      const expired = appendSignalTransition({
-        currentState: signal.state,
-        nextState: 'EXPIRED',
-        currentTimeline: signal.timeline,
-        reason: 'Approval was attempted after the proposal expired',
-      });
+    const risk = evaluateRiskPolicy({
+      phase: 'APPROVAL',
+      order: {
+        asset: signal.symbol,
+        venue: signal.llmOutput.venue,
+        direction: signal.side ?? signal.llmOutput.direction,
+        notionalUsd: request.notionalUsd,
+        leverage: request.leverage,
+        entryReference: signal.llmOutput.entryReference,
+        stopLossPrice: request.stopLossPrice,
+        expiresAt: signal.expiresAt,
+      },
+      mandate,
+      dailyRealizedLossUsd,
+      explicitApprovalProvided: true,
+      now,
+    });
+
+    if (!risk.allowed) {
       await db
         .update(signals)
-        .set({ ...expired, updatedAt: new Date() })
+        .set({ riskPreview: risk, updatedAt: now })
         .where(and(eq(signals.id, signal.id), eq(signals.state, signal.state)));
-      throw new SignalActionError('SIGNAL_EXPIRED', 'This signal has expired');
-    }
-
-    if (request.notionalUsd > mandate.riskLimits.maxPositionUsd) {
-      throw new SignalActionError(
-        'MAX_NOTIONAL_EXCEEDED',
-        `Notional cannot exceed $${mandate.riskLimits.maxPositionUsd}`,
-        'notionalUsd',
-      );
-    }
-    if (request.leverage > mandate.riskLimits.maxLeverage) {
-      throw new SignalActionError(
-        'MAX_LEVERAGE_EXCEEDED',
-        `Leverage cannot exceed ${mandate.riskLimits.maxLeverage}x`,
-        'leverage',
-      );
+      const failed = firstFailedRiskRule(risk);
+      if (!failed) throw new Error('Blocked risk result contained no failed rule');
+      if (failed.code === 'SIGNAL_EXPIRED') {
+        const expired = appendSignalTransition({
+          currentState: signal.state,
+          nextState: 'EXPIRED',
+          currentTimeline: signal.timeline,
+          reason: 'Approval-time risk evaluation found the signal expired',
+        });
+        await db
+          .update(signals)
+          .set({ ...expired, riskPreview: risk, updatedAt: now })
+          .where(and(eq(signals.id, signal.id), eq(signals.state, signal.state)));
+      }
+      throw new SignalActionError(failed.code, failed.explanation, fieldForCode(failed.code), risk);
     }
 
     const approved = appendSignalTransition({
       currentState: signal.state,
       nextState: 'APPROVED',
       currentTimeline: signal.timeline,
-      reason: 'User approved proposal parameters; execution deferred in Phase 2',
+      reason: 'Edited values passed current deterministic policy after explicit human approval',
       metadata: { approvalRevision: request.approvalRevision },
     });
     const updated = await db
       .update(signals)
       .set({
         ...approved,
+        riskPreview: risk,
         proposedNotionalUsd: request.notionalUsd,
         proposedLeverage: request.leverage,
         stopLossPrice: request.stopLossPrice,
-        updatedAt: new Date(),
+        updatedAt: now,
       })
       .where(and(eq(signals.id, signal.id), eq(signals.state, signal.state)))
       .returning({ id: signals.id });
@@ -105,7 +126,7 @@ export class ApprovalStubService {
       currentState: signal.state,
       nextState: 'REJECTED',
       currentTimeline: signal.timeline,
-      reason: 'User rejected proposal from the mobile approval flow',
+      reason: 'User rejected the proposal from the mobile approval flow',
     });
     const updated = await db
       .update(signals)
@@ -120,4 +141,11 @@ export class ApprovalStubService {
     if (!detail) throw new SignalActionError('SIGNAL_NOT_FOUND', 'Signal was not found');
     return detail;
   }
+}
+
+function fieldForCode(code: RiskCode): string | undefined {
+  if (code === 'MAX_NOTIONAL_EXCEEDED') return 'notionalUsd';
+  if (code === 'MAX_LEVERAGE_EXCEEDED') return 'leverage';
+  if (code === 'STOP_LOSS_REQUIRED' || code === 'STOP_LOSS_INVALID') return 'stopLossPrice';
+  return undefined;
 }

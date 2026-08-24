@@ -21,7 +21,7 @@ export const ApprovalRequestSchema = z
     approvalRevision: z.number().int().positive(),
     notionalUsd: PositiveMoneySchema,
     leverage: z.number().finite().positive(),
-    stopLossPrice: PriceSchema,
+    stopLossPrice: PriceSchema.nullable(),
   })
   .strict();
 export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>;

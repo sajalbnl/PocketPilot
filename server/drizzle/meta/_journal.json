@@ -15,6 +15,13 @@
       "when": 1787558400000,
       "tag": "0001_sticky_naoko",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787563200000,
+      "tag": "0003_flawless_cloak",
+      "breakpoints": true
     }
   ]
 }

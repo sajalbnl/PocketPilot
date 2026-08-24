@@ -1,12 +1,13 @@
 import {
   ApprovalRequestSchema,
+  RiskPreviewSchema,
   type ApprovalRequest,
   type Mandate,
   type SignalDetail,
 } from '@pocketpilot/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Controller, useForm } from 'react-hook-form';
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -20,7 +21,7 @@ import {
   View,
 } from 'react-native';
 
-import { readableError } from '../lib/api';
+import { ApiClientError, readableError } from '../lib/api';
 import { formatUsd } from '../lib/format';
 import { useApproveSignal, useRejectSignal } from '../lib/queries';
 import { colors, radii } from '../lib/theme';
@@ -33,20 +34,6 @@ interface ApprovalSheetProps {
 }
 
 export function ApprovalSheet({ visible, onClose, signal, mandate }: ApprovalSheetProps) {
-  const schema = useMemo(
-    () =>
-      ApprovalRequestSchema.refine(
-        (value) => value.notionalUsd <= mandate.riskLimits.maxPositionUsd,
-        {
-          path: ['notionalUsd'],
-          message: `Maximum is $${mandate.riskLimits.maxPositionUsd}`,
-        },
-      ).refine((value) => value.leverage <= mandate.riskLimits.maxLeverage, {
-        path: ['leverage'],
-        message: `Maximum is ${mandate.riskLimits.maxLeverage}x`,
-      }),
-    [mandate.riskLimits.maxLeverage, mandate.riskLimits.maxPositionUsd],
-  );
   const approve = useApproveSignal(signal.id);
   const reject = useRejectSignal(signal.id);
   const busy = approve.isPending || reject.isPending;
@@ -56,7 +43,7 @@ export function ApprovalSheet({ visible, onClose, signal, mandate }: ApprovalShe
     reset,
     formState: { errors },
   } = useForm<ApprovalRequest>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(ApprovalRequestSchema),
     mode: 'onChange',
     defaultValues: {
       approvalRevision: 1,
@@ -99,6 +86,13 @@ export function ApprovalSheet({ visible, onClose, signal, mandate }: ApprovalShe
   };
 
   const serverError = approve.error ?? reject.error;
+  const parsedRisk =
+    serverError instanceof ApiClientError
+      ? RiskPreviewSchema.safeParse(serverError.details?.risk)
+      : null;
+  const rejectedRisk = parsedRisk?.success
+    ? parsedRisk.data.rules.filter((rule) => !rule.passed)
+    : [];
 
   return (
     <Modal
@@ -162,14 +156,19 @@ export function ApprovalSheet({ visible, onClose, signal, mandate }: ApprovalShe
             />
 
             <Text style={styles.safetyCopy}>
-              The server validates this intent and remains authoritative. Phase 2 records approval
-              only; it does not create or execute an order.
+              The server reruns every deterministic rule against these edited values. Passing marks
+              the intent ready for Phase 5; it does not create or execute an order here.
             </Text>
 
             {serverError ? (
               <View style={styles.serverError}>
                 <Text style={styles.serverErrorTitle}>Action not saved</Text>
                 <Text style={styles.serverErrorBody}>{readableError(serverError)}</Text>
+                {rejectedRisk.map((rule) => (
+                  <Text key={rule.ruleId} style={styles.serverRiskRule}>
+                    {rule.ruleId.replaceAll('-', ' ')} · {rule.explanation}
+                  </Text>
+                ))}
               </View>
             ) : null}
 
@@ -186,7 +185,7 @@ export function ApprovalSheet({ visible, onClose, signal, mandate }: ApprovalShe
               {approve.isPending ? (
                 <ActivityIndicator color={colors.background} />
               ) : (
-                <Text style={styles.approveText}>Approve intent</Text>
+                <Text style={styles.approveText}>Validate & approve intent</Text>
               )}
             </Pressable>
             <Pressable
@@ -244,7 +243,7 @@ function Field({
               onChangeText={(text) => onChange(text.trim() === '' ? Number.NaN : Number(text))}
               selectTextOnFocus
               style={styles.input}
-              value={Number.isNaN(value) ? '' : String(value)}
+              value={value === null || Number.isNaN(value) ? '' : String(value)}
             />
             {suffix ? <Text style={styles.affix}>{suffix}</Text> : null}
           </View>
@@ -314,6 +313,7 @@ const styles = StyleSheet.create({
   },
   serverErrorTitle: { color: colors.red, fontSize: 12, fontWeight: '800' },
   serverErrorBody: { color: colors.text, fontSize: 12, lineHeight: 18, marginTop: 3 },
+  serverRiskRule: { color: colors.red, fontSize: 11, lineHeight: 17, marginTop: 5 },
   approveButton: {
     alignItems: 'center',
     backgroundColor: colors.mint,

@@ -1,6 +1,7 @@
 import type {
   CompactError,
   LlmDecisionOutput,
+  ReasoningMetadata,
   RiskPreview,
   SignalEvidence,
   SignalTimelineEntry,
@@ -93,6 +94,8 @@ export const signals = pgTable(
     marketSnapshot: jsonb('market_snapshot').$type<SignalEvidence | null>(),
     triggeredRules: jsonb('triggered_rules').$type<string[]>().notNull().default([]),
     llmOutput: jsonb('llm_output').$type<LlmDecisionOutput | null>(),
+    llmMetadata: jsonb('llm_metadata').$type<ReasoningMetadata | null>(),
+    reasoningError: jsonb('reasoning_error').$type<CompactError | null>(),
     riskPreview: jsonb('risk_preview').$type<RiskPreview | null>(),
     proposedNotionalUsd: numeric('proposed_notional_usd', {
       precision: 18,

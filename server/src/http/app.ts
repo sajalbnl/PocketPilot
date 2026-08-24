@@ -12,7 +12,7 @@ import {
 import { env } from '../config/env.js';
 import { getCurrentMandate } from '../db/mandate-repository.js';
 import { getSignal, listSignals } from '../db/signal-repository.js';
-import { ApprovalStubService, SignalActionError } from '../domain/approval-stub-service.js';
+import { ApprovalService, SignalActionError } from '../domain/approval-service.js';
 import { HealthService } from '../domain/health-service.js';
 import type { ReplayController } from '../replay/controller.js';
 import { replayFixtureNames } from '../replay/fixture-source.js';
@@ -21,7 +21,7 @@ import { z } from 'zod';
 
 export function createApp(
   healthService = new HealthService(),
-  approvalService = new ApprovalStubService(),
+  approvalService = new ApprovalService(),
   replayController?: ReplayController,
 ): express.Express {
   const app = express();
@@ -89,7 +89,7 @@ export function createApp(
         SignalActionResultSchema.parse({
           signal,
           executionDeferred: true,
-          message: 'Approval saved. Order execution arrives in Phase 5.',
+          message: 'Approval passed current policy. Order execution is deferred to Phase 5.',
         }),
       );
     } catch (error: unknown) {
@@ -178,10 +178,8 @@ export function createApp(
 function toHttpError(error: unknown): unknown {
   if (!(error instanceof SignalActionError)) return error;
   const status = error.code.endsWith('NOT_FOUND') ? 404 : 409;
-  return new HttpError(
-    status,
-    error.code,
-    error.message,
-    error.field ? { field: error.field } : {},
-  );
+  return new HttpError(status, error.code, error.message, {
+    ...(error.field ? { field: error.field } : {}),
+    ...(error.risk ? { risk: error.risk } : {}),
+  });
 }

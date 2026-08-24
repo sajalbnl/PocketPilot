@@ -47,7 +47,7 @@ export const terminalSignalStates = [
   'EXECUTION_FAILED',
 ] as const satisfies readonly SignalState[];
 
-export const llmDecisions = ['WATCH', 'NO_TRADE', 'PROPOSE_LONG', 'PROPOSE_SHORT'] as const;
+export const llmDecisions = ['PROPOSE', 'NO_TRADE'] as const;
 export const LlmDecisionSchema = z.enum(llmDecisions);
 export type LlmDecision = z.infer<typeof LlmDecisionSchema>;
 
@@ -66,6 +66,7 @@ export const riskCodes = [
   'MAX_LEVERAGE_EXCEEDED',
   'DAILY_LOSS_LIMIT_REACHED',
   'STOP_LOSS_REQUIRED',
+  'STOP_LOSS_INVALID',
   'APPROVAL_REQUIRED',
   'SIGNAL_EXPIRED',
   'KILL_SWITCH_ENABLED',
