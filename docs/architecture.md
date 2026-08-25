@@ -1,10 +1,10 @@
-# Phase 4 architecture
+# Phase 5 architecture
 
 ## Trust boundaries
 
 `shared/` contains the framework-independent runtime contracts and the only signal transition map.
 The app and server consume its compiled package. The server is authoritative for persistence and
-risk; the mobile app never directly changes lifecycle state. Execution remains deferred to Phase 5.
+risk and execution; the mobile app never directly changes lifecycle state or submits venue orders.
 
 The server's domain transition helper validates a transition first and returns a new timeline array.
 Callers persist that array as one JSONB value. Existing entries are never edited or removed, making
@@ -80,3 +80,22 @@ The four inbox categories are projections of lifecycle state, not extra persiste
 - Monitoring: `DETECTED`, `ANALYZING`, `PROPOSED`, `APPROVED`, `EXECUTING`
 - Executed: `FILLED`, `CLOSED`
 - Expired: terminal inactive outcomes, including `EXPIRED` and `REJECTED`
+
+## Execution and control boundary
+
+`ExecutionAdapter` exposes only current-price retrieval, market submission, and position close. It
+accepts normalized symbols/sides and a stable server client-order ID; signing, SDK responses, and
+venue-specific errors remain behind the adapter. Phase 5 wires only `PaperExecutionAdapter`.
+
+The paper path locks the signal and mandate row and performs approval policy, APPROVED, order claim,
+the immediate pre-execution policy check, EXECUTING, local paper fill, position creation, and FILLED
+inside one PostgreSQL transaction. The unique approval key and client-order ID are both
+`signalId:approval-rN`; `positions.order_id` guarantees one position. A duplicate revision returns
+the prior filled order/position. A close locks the position and uses `close:positionId`, so repeat
+taps return the stored close.
+
+The kill-switch endpoint updates the mandate under a row lock and increments its version. Approval
+locks that same row through its second policy check and paper fill, preventing a kill-switch commit
+between the check and execution. The switch blocks new work but never closes a position.
+
+Paper fills and marking are specified in `docs/paper-execution.md`.

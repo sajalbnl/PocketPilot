@@ -10,6 +10,7 @@ import {
 } from './enums.js';
 import {
   FlatMetadataSchema,
+  NonNegativeMoneySchema,
   PositiveMoneySchema,
   PriceSchema,
   UtcDateTimeSchema,
@@ -19,12 +20,33 @@ import {
 export const ApprovalRequestSchema = z
   .object({
     approvalRevision: z.number().int().positive(),
+    requestKey: z.string().trim().min(1).max(120).optional(),
     notionalUsd: PositiveMoneySchema,
     leverage: z.number().finite().positive(),
     stopLossPrice: PriceSchema.nullable(),
   })
   .strict();
 export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>;
+
+export const AdapterErrorCodeSchema = z.enum([
+  'PRICE_UNAVAILABLE',
+  'ORDER_REJECTED',
+  'POSITION_NOT_FOUND',
+  'POSITION_ALREADY_CLOSED',
+  'ADAPTER_UNAVAILABLE',
+  'ADAPTER_FAILURE',
+]);
+export type AdapterErrorCode = z.infer<typeof AdapterErrorCodeSchema>;
+
+export const PriceQuoteSchema = z
+  .object({
+    symbol: AssetSchema,
+    price: PriceSchema,
+    asOf: UtcDateTimeSchema,
+    source: z.string().min(1),
+  })
+  .strict();
+export type PriceQuote = z.infer<typeof PriceQuoteSchema>;
 
 export const CompactErrorSchema = z
   .object({
@@ -42,6 +64,7 @@ export const OrderSchema = z
     id: UuidSchema,
     signalId: UuidSchema,
     approvalKey: z.string().min(1),
+    clientOrderId: z.string().min(1),
     executionMode: ExecutionModeSchema,
     venueOrderId: z.string().min(1).nullable(),
     side: TradeSideSchema,
@@ -49,8 +72,12 @@ export const OrderSchema = z
     leverage: z.number().finite().positive(),
     requestedPrice: PriceSchema.nullable(),
     fillPrice: PriceSchema.nullable(),
+    quantity: z.number().finite().positive().nullable(),
+    feeUsd: NonNegativeMoneySchema,
+    slippageBps: z.number().finite().nonnegative(),
     status: OrderStatusSchema,
     error: CompactErrorSchema.nullable(),
+    filledAt: UtcDateTimeSchema.nullable(),
     createdAt: UtcDateTimeSchema,
     updatedAt: UtcDateTimeSchema,
   })
@@ -67,7 +94,13 @@ export const PositionSchema = z
     currentPrice: PriceSchema,
     notionalUsd: PositiveMoneySchema,
     leverage: z.number().finite().positive(),
+    quantity: z.number().finite().positive(),
     stopLossPrice: PriceSchema,
+    entryFeeUsd: NonNegativeMoneySchema,
+    exitFeeUsd: NonNegativeMoneySchema.nullable(),
+    closeClientOrderId: z.string().min(1).nullable(),
+    closeVenueOrderId: z.string().min(1).nullable(),
+    closePrice: PriceSchema.nullable(),
     unrealizedPnl: z.number().finite(),
     realizedPnl: z.number().finite().nullable(),
     status: PositionStatusSchema,
@@ -77,6 +110,19 @@ export const PositionSchema = z
   })
   .strict();
 export type Position = z.infer<typeof PositionSchema>;
+
+export const PositionDetailSchema = PositionSchema.extend({
+  executionMode: ExecutionModeSchema,
+  signalId: UuidSchema,
+  thesisHealth: z.string().min(1),
+  invalidationSummary: z.array(z.string().min(1)),
+}).strict();
+export type PositionDetail = z.infer<typeof PositionDetailSchema>;
+
+export const PositionListResponseSchema = z
+  .object({ positions: z.array(PositionDetailSchema), total: z.number().int().nonnegative() })
+  .strict();
+export type PositionListResponse = z.infer<typeof PositionListResponseSchema>;
 
 export const ApprovalAcceptedSchema = z
   .object({
@@ -101,6 +147,32 @@ export const ApprovalResultSchema = z.discriminatedUnion('allowed', [
   ApprovalBlockedSchema,
 ]);
 export type ApprovalResult = z.infer<typeof ApprovalResultSchema>;
+
+export const ApprovalExecutionResultSchema = z
+  .object({
+    allowed: z.literal(true),
+    approvalKey: z.string().min(1),
+    duplicate: z.boolean(),
+    order: OrderSchema,
+    position: PositionDetailSchema,
+    message: z.string().min(1),
+  })
+  .strict();
+export type ApprovalExecutionResult = z.infer<typeof ApprovalExecutionResultSchema>;
+
+export const ClosePositionResultSchema = z
+  .object({
+    position: PositionDetailSchema,
+    duplicate: z.boolean(),
+    message: z.string().min(1),
+  })
+  .strict();
+export type ClosePositionResult = z.infer<typeof ClosePositionResultSchema>;
+
+export const RejectSignalRequestSchema = z
+  .object({ reason: z.string().trim().min(1).max(240).optional() })
+  .strict();
+export type RejectSignalRequest = z.infer<typeof RejectSignalRequestSchema>;
 
 export const ApiErrorSchema = z
   .object({

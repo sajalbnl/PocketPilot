@@ -23,6 +23,7 @@
     "db:generate": "npm run db:generate -w @pocketpilot/server",
     "db:migrate": "npm run db:migrate -w @pocketpilot/server",
     "db:seed": "npm run db:seed -w @pocketpilot/server",
+    "demo:reset": "npm run demo:reset -w @pocketpilot/server",
     "replay": "npm run replay -w @pocketpilot/server --",
     "replay:reset": "npm run replay:reset -w @pocketpilot/server"
   },

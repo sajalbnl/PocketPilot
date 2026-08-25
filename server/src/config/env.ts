@@ -19,6 +19,8 @@ const EnvironmentSchema = z.object({
   DATA_MODE: DataModeSchema.default('replay'),
   EXECUTION_MODE: ExecutionModeSchema.default('paper'),
   REPLAY_SPEED: z.coerce.number().finite().nonnegative().default(1_000),
+  PAPER_FEE_BPS: z.coerce.number().finite().min(0).max(100).default(5),
+  PAPER_SLIPPAGE_BPS: z.coerce.number().finite().min(0).max(100).default(2),
   LLM_PROVIDER: z.enum(['fixture', 'openai']).default('fixture'),
   OPENAI_API_KEY: z.preprocess(
     (value) => (value === '' ? undefined : value),

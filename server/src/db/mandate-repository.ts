@@ -4,10 +4,9 @@ import { asc } from 'drizzle-orm';
 import { db } from './client.js';
 import { mandates } from './schema.js';
 
-export async function getCurrentMandate(): Promise<Mandate | null> {
-  const [row] = await db.select().from(mandates).orderBy(asc(mandates.createdAt)).limit(1);
-  if (!row) return null;
+export type MandateRow = typeof mandates.$inferSelect;
 
+export function mapMandate(row: MandateRow): Mandate {
   return MandateSchema.parse({
     id: row.id,
     agentName: row.agentName,
@@ -27,4 +26,11 @@ export async function getCurrentMandate(): Promise<Mandate | null> {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   });
+}
+
+export async function getCurrentMandate(): Promise<Mandate | null> {
+  const [row] = await db.select().from(mandates).orderBy(asc(mandates.createdAt)).limit(1);
+  if (!row) return null;
+
+  return mapMandate(row);
 }

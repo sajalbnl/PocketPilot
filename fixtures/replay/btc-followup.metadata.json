@@ -1,0 +1,11 @@
+{
+  "id": "btc-catalyst-followup-2025-05-23",
+  "title": "BTC bullish cross-market confirmation follow-up",
+  "historical": true,
+  "capturedAt": "2025-05-23T10:06:00.000Z",
+  "attribution": [
+    { "source": "hyperliquid", "url": "https://hyperliquid.xyz" },
+    { "source": "polymarket", "url": "https://polymarket.com" }
+  ],
+  "note": "Distinct deterministic replay ID for the kill-switch demo. Values are curated historical replay inputs and are not live quotes."
+}

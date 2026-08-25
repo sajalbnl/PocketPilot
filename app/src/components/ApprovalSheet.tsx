@@ -6,6 +6,7 @@ import {
   type SignalDetail,
 } from '@pocketpilot/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { router } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import { useEffect } from 'react';
 import {
@@ -68,8 +69,9 @@ export function ApprovalSheet({ visible, onClose, signal, mandate }: ApprovalShe
 
   const submitApproval = handleSubmit(async (values) => {
     try {
-      await approve.mutateAsync(values);
+      const result = await approve.mutateAsync(values);
       onClose();
+      router.replace(`/positions/${result.position.id}` as never);
     } catch {
       // The mutation error remains visible in this sheet.
     }
@@ -156,8 +158,8 @@ export function ApprovalSheet({ visible, onClose, signal, mandate }: ApprovalShe
             />
 
             <Text style={styles.safetyCopy}>
-              The server reruns every deterministic rule against these edited values. Passing marks
-              the intent ready for Phase 5; it does not create or execute an order here.
+              The server reruns every deterministic rule against these edited values, checks the
+              kill switch again, and creates at most one paper order for this approval revision.
             </Text>
 
             {serverError ? (
@@ -185,7 +187,7 @@ export function ApprovalSheet({ visible, onClose, signal, mandate }: ApprovalShe
               {approve.isPending ? (
                 <ActivityIndicator color={colors.background} />
               ) : (
-                <Text style={styles.approveText}>Validate & approve intent</Text>
+                <Text style={styles.approveText}>Approve & execute paper order</Text>
               )}
             </Pressable>
             <Pressable

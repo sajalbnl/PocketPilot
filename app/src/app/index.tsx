@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -15,7 +16,7 @@ import {
 
 import { SignalCard } from '../components/SignalCard';
 import { API_BASE_URL, readableError } from '../lib/api';
-import { useSignals } from '../lib/queries';
+import { useAgentControl, usePositions, useSetKillSwitch, useSignals } from '../lib/queries';
 import { colors } from '../lib/theme';
 
 const categoryCopy: Record<SignalCategory, { label: string; empty: string }> = {
@@ -31,7 +32,30 @@ const categoryCopy: Record<SignalCategory, { label: string; empty: string }> = {
 export default function SignalInboxScreen() {
   const [category, setCategory] = useState<SignalCategory>('approval-required');
   const query = useSignals(category);
+  const control = useAgentControl();
+  const positions = usePositions();
+  const setKillSwitch = useSetKillSwitch();
   const copy = categoryCopy[category];
+  const latestPosition = positions.data?.positions[0];
+
+  const confirmKillSwitch = () => {
+    if (!control.data || setKillSwitch.isPending) return;
+    const enabled = !control.data.killSwitchEnabled;
+    Alert.alert(
+      enabled ? 'Pause new execution?' : 'Resume new execution?',
+      enabled
+        ? 'New approvals and executions will be blocked. Existing positions remain open.'
+        : 'New approvals may execute again when they pass current risk policy.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: enabled ? 'Enable kill switch' : 'Resume agent',
+          style: enabled ? 'destructive' : 'default',
+          onPress: () => setKillSwitch.mutate({ enabled, confirmed: true }),
+        },
+      ],
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -41,11 +65,52 @@ export default function SignalInboxScreen() {
           <Text style={styles.title}>Signal inbox</Text>
           <Text style={styles.subtitle}>Evidence first. Execution only after approval.</Text>
         </View>
-        <View style={styles.livePill}>
-          <View style={styles.liveDot} />
-          <Text style={styles.liveText}>REPLAY</Text>
+        <View style={styles.headerActions}>
+          <View style={styles.livePill}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveText}>REPLAY</Text>
+          </View>
+          {latestPosition ? (
+            <Pressable
+              onPress={() => router.push(`/positions/${latestPosition.id}` as never)}
+              style={styles.positionLink}
+            >
+              <Text style={styles.positionLinkText}>POSITION</Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
+
+      <Pressable
+        accessibilityRole="button"
+        disabled={!control.data || setKillSwitch.isPending}
+        onPress={confirmKillSwitch}
+        style={[styles.controlCard, control.data?.killSwitchEnabled && styles.controlCardPaused]}
+      >
+        <View>
+          <Text style={styles.controlLabel}>AGENT CONTROL</Text>
+          <Text style={styles.controlTitle}>
+            {control.data?.killSwitchEnabled ? 'Kill switch active' : 'Execution enabled'}
+          </Text>
+          <Text style={styles.controlBody}>
+            {control.data?.killSwitchEnabled
+              ? 'New approvals blocked · positions stay open'
+              : 'Tap to pause new approvals and execution'}
+          </Text>
+        </View>
+        {setKillSwitch.isPending ? (
+          <ActivityIndicator color={colors.text} />
+        ) : (
+          <Text
+            style={[
+              styles.controlAction,
+              control.data?.killSwitchEnabled && styles.controlActionPaused,
+            ]}
+          >
+            {control.data?.killSwitchEnabled ? 'RESUME' : 'PAUSE'}
+          </Text>
+        )}
+      </Pressable>
 
       <ScrollView
         horizontal
@@ -147,6 +212,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: colors.mint, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
   title: { color: colors.text, fontSize: 31, fontWeight: '800', letterSpacing: -0.9, marginTop: 7 },
   subtitle: { color: colors.textMuted, fontSize: 13, marginTop: 5 },
+  headerActions: { alignItems: 'flex-end', gap: 9 },
   livePill: {
     alignItems: 'center',
     backgroundColor: colors.mintDark,
@@ -159,6 +225,32 @@ const styles = StyleSheet.create({
   },
   liveDot: { backgroundColor: colors.mint, borderRadius: 4, height: 6, width: 6 },
   liveText: { color: colors.mint, fontSize: 9, fontWeight: '900', letterSpacing: 0.7 },
+  positionLink: {
+    borderColor: colors.borderStrong,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  positionLinkText: { color: colors.textMuted, fontSize: 9, fontWeight: '900', letterSpacing: 0.7 },
+  controlCard: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginHorizontal: 20,
+    marginTop: 18,
+    padding: 14,
+  },
+  controlCardPaused: { backgroundColor: colors.redDark, borderColor: colors.red },
+  controlLabel: { color: colors.textDim, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  controlTitle: { color: colors.text, fontSize: 14, fontWeight: '800', marginTop: 3 },
+  controlBody: { color: colors.textMuted, fontSize: 11, marginTop: 3 },
+  controlAction: { color: colors.red, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
+  controlActionPaused: { color: colors.mint },
   tabs: { gap: 8, paddingHorizontal: 20, paddingVertical: 22 },
   tab: {
     alignItems: 'center',

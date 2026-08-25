@@ -10,7 +10,7 @@ import {
 } from '../market/raw-events.js';
 
 const FIXTURE_ROOT = fileURLToPath(new URL('../../../fixtures/replay/', import.meta.url));
-export const replayFixtureNames = ['btc-trigger', 'btc-no-trigger'] as const;
+export const replayFixtureNames = ['btc-trigger', 'btc-followup', 'btc-no-trigger'] as const;
 export type ReplayFixtureName = (typeof replayFixtureNames)[number];
 
 export const ReplayMetadataSchema = z

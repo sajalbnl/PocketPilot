@@ -14,7 +14,7 @@ npm run replay -- --fixture btc-trigger --speed 0
 Expected summary (the stable UUID is derived from the deduplication key):
 
 ```text
-Replay btc-catalyst-demo-2025-05-23 complete events=4/4 created=1 deduplicated=0 signals=0ea64328-4a8b-4a28-9ee9-d8759c546260
+Replay btc-catalyst-demo-2025-05-23 complete events=6/6 created=1 deduplicated=0 signals=0ea64328-4a8b-4a28-9ee9-d8759c546260
 ```
 
 Running the same command again reports `created=0 deduplicated=1` and returns the same signal ID.
@@ -36,6 +36,11 @@ curl -X POST http://localhost:3000/dev/replay/start \
 curl -X POST http://localhost:3000/dev/replay/step
 curl http://localhost:3000/dev/replay/status
 ```
+
+The proposal appears after the fourth event. Events five and six are normalized Hyperliquid marks
+at $66,500 and $65,500; advance them after approval to exercise 10-second position marking and PnL.
+Run `btc-followup` before enabling the kill switch to create the second pending proposal used by the
+control demo.
 
 The developer endpoints are not registered in production. Reset deletes only replay-mode signals
 with a non-null Phase 3 candidate key; mandates, manual/seeded signals, orders, positions, and live

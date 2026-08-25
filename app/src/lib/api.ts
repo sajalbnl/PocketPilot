@@ -1,12 +1,23 @@
 import {
+  AgentControlStateSchema,
   ApiErrorSchema,
+  ApprovalExecutionResultSchema,
+  ClosePositionResultSchema,
   MandateSchema,
-  SignalActionResultSchema,
+  PositionDetailSchema,
+  PositionListResponseSchema,
+  RejectSignalResultSchema,
   SignalDetailSchema,
   SignalListResponseSchema,
+  type AgentControlState,
+  type ApprovalExecutionResult,
   type ApprovalRequest,
+  type ClosePositionResult,
+  type KillSwitchUpdateRequest,
   type Mandate,
-  type SignalActionResult,
+  type PositionDetail,
+  type PositionListResponse,
+  type RejectSignalResult,
   type SignalCategory,
   type SignalDetail,
   type SignalListResponse,
@@ -79,16 +90,37 @@ export const api = {
   getMandate(): Promise<Mandate> {
     return request('/mandate', MandateSchema);
   },
-  approveSignal(id: string, approval: ApprovalRequest): Promise<SignalActionResult> {
-    return request(`/signals/${encodeURIComponent(id)}/approve`, SignalActionResultSchema, {
+  approveSignal(id: string, approval: ApprovalRequest): Promise<ApprovalExecutionResult> {
+    return request(`/signals/${encodeURIComponent(id)}/approve`, ApprovalExecutionResultSchema, {
       method: 'POST',
       body: JSON.stringify(approval),
     });
   },
-  rejectSignal(id: string): Promise<SignalActionResult> {
-    return request(`/signals/${encodeURIComponent(id)}/reject`, SignalActionResultSchema, {
+  rejectSignal(id: string): Promise<RejectSignalResult> {
+    return request(`/signals/${encodeURIComponent(id)}/reject`, RejectSignalResultSchema, {
       method: 'POST',
       body: '{}',
+    });
+  },
+  listPositions(): Promise<PositionListResponse> {
+    return request('/positions', PositionListResponseSchema);
+  },
+  getPosition(id: string): Promise<PositionDetail> {
+    return request(`/positions/${encodeURIComponent(id)}`, PositionDetailSchema);
+  },
+  closePosition(id: string): Promise<ClosePositionResult> {
+    return request(`/positions/${encodeURIComponent(id)}/close`, ClosePositionResultSchema, {
+      method: 'POST',
+      body: '{}',
+    });
+  },
+  getAgentControl(): Promise<AgentControlState> {
+    return request('/agent/control', AgentControlStateSchema);
+  },
+  setKillSwitch(update: KillSwitchUpdateRequest): Promise<AgentControlState> {
+    return request('/agent/kill-switch', AgentControlStateSchema, {
+      method: 'POST',
+      body: JSON.stringify(update),
     });
   },
 };

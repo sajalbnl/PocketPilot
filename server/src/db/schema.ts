@@ -130,6 +130,7 @@ export const orders = pgTable(
       .notNull()
       .references(() => signals.id, { onDelete: 'restrict' }),
     approvalKey: text('approval_key').notNull(),
+    clientOrderId: text('client_order_id').notNull(),
     executionMode: executionModeEnum('execution_mode').notNull(),
     venueOrderId: text('venue_order_id'),
     side: tradeSideEnum('side').notNull(),
@@ -137,15 +138,25 @@ export const orders = pgTable(
     leverage: numeric('leverage', { precision: 8, scale: 2, mode: 'number' }).notNull(),
     requestedPrice: numeric('requested_price', { precision: 24, scale: 8, mode: 'number' }),
     fillPrice: numeric('fill_price', { precision: 24, scale: 8, mode: 'number' }),
+    quantity: numeric('quantity', { precision: 28, scale: 12, mode: 'number' }),
+    feeUsd: numeric('fee_usd', { precision: 18, scale: 8, mode: 'number' }).notNull().default(0),
+    slippageBps: numeric('slippage_bps', { precision: 10, scale: 4, mode: 'number' })
+      .notNull()
+      .default(0),
     status: orderStatusEnum('status').notNull().default('PENDING'),
     error: jsonb('error').$type<CompactError | null>(),
+    filledAt: timestamp('filled_at', { withTimezone: true, mode: 'date' }),
     ...timestamps,
   },
   (table) => [
     uniqueIndex('orders_approval_key_uidx').on(table.approvalKey),
+    uniqueIndex('orders_client_order_id_uidx').on(table.clientOrderId),
     index('orders_signal_id_idx').on(table.signalId),
     check('orders_notional_positive', sql`${table.notionalUsd} > 0`),
     check('orders_leverage_positive', sql`${table.leverage} > 0`),
+    check('orders_quantity_positive', sql`${table.quantity} IS NULL OR ${table.quantity} > 0`),
+    check('orders_fee_nonnegative', sql`${table.feeUsd} >= 0`),
+    check('orders_slippage_nonnegative', sql`${table.slippageBps} >= 0`),
   ],
 );
 
@@ -162,11 +173,19 @@ export const positions = pgTable(
     currentPrice: numeric('current_price', { precision: 24, scale: 8, mode: 'number' }).notNull(),
     notionalUsd: numeric('notional_usd', { precision: 18, scale: 2, mode: 'number' }).notNull(),
     leverage: numeric('leverage', { precision: 8, scale: 2, mode: 'number' }).notNull(),
+    quantity: numeric('quantity', { precision: 28, scale: 12, mode: 'number' }).notNull(),
     stopLossPrice: numeric('stop_loss_price', {
       precision: 24,
       scale: 8,
       mode: 'number',
     }).notNull(),
+    entryFeeUsd: numeric('entry_fee_usd', { precision: 18, scale: 8, mode: 'number' })
+      .notNull()
+      .default(0),
+    exitFeeUsd: numeric('exit_fee_usd', { precision: 18, scale: 8, mode: 'number' }),
+    closeClientOrderId: text('close_client_order_id'),
+    closeVenueOrderId: text('close_venue_order_id'),
+    closePrice: numeric('close_price', { precision: 24, scale: 8, mode: 'number' }),
     unrealizedPnl: numeric('unrealized_pnl', { precision: 18, scale: 8, mode: 'number' })
       .notNull()
       .default(0),
@@ -177,11 +196,22 @@ export const positions = pgTable(
   },
   (table) => [
     uniqueIndex('positions_order_id_uidx').on(table.orderId),
+    uniqueIndex('positions_close_client_order_id_uidx').on(table.closeClientOrderId),
     check(
       'positions_prices_positive',
       sql`${table.entryPrice} > 0 AND ${table.currentPrice} > 0 AND ${table.stopLossPrice} > 0`,
     ),
     check('positions_notional_positive', sql`${table.notionalUsd} > 0`),
     check('positions_leverage_positive', sql`${table.leverage} > 0`),
+    check('positions_quantity_positive', sql`${table.quantity} > 0`),
+    check('positions_entry_fee_nonnegative', sql`${table.entryFeeUsd} >= 0`),
+    check(
+      'positions_exit_fee_nonnegative',
+      sql`${table.exitFeeUsd} IS NULL OR ${table.exitFeeUsd} >= 0`,
+    ),
+    check(
+      'positions_close_price_positive',
+      sql`${table.closePrice} IS NULL OR ${table.closePrice} > 0`,
+    ),
   ],
 );

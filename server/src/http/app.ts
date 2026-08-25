@@ -1,8 +1,15 @@
 import express from 'express';
 import {
+  AgentControlStateSchema,
+  ApprovalExecutionResultSchema,
   ApprovalRequestSchema,
+  ClosePositionResultSchema,
+  KillSwitchUpdateRequestSchema,
   MandateSchema,
-  SignalActionResultSchema,
+  PositionDetailSchema,
+  PositionListResponseSchema,
+  RejectSignalRequestSchema,
+  RejectSignalResultSchema,
   SignalDetailSchema,
   SignalListQuerySchema,
   SignalListResponseSchema,
@@ -12,16 +19,23 @@ import {
 import { env } from '../config/env.js';
 import { getCurrentMandate } from '../db/mandate-repository.js';
 import { getSignal, listSignals } from '../db/signal-repository.js';
-import { ApprovalService, SignalActionError } from '../domain/approval-service.js';
-import { HealthService } from '../domain/health-service.js';
+import { SignalActionError } from '../domain/approval-service.js';
+import type { ApprovalService } from '../domain/approval-service.js';
+import { AgentControlError } from '../domain/agent-control-service.js';
+import type { AgentControlService } from '../domain/agent-control-service.js';
+import type { HealthService } from '../domain/health-service.js';
+import { PositionActionError } from '../domain/position-service.js';
+import type { PositionService } from '../domain/position-service.js';
 import type { ReplayController } from '../replay/controller.js';
 import { replayFixtureNames } from '../replay/fixture-source.js';
 import { errorHandler, HttpError, notFoundHandler } from './errors.js';
 import { z } from 'zod';
 
 export function createApp(
-  healthService = new HealthService(),
-  approvalService = new ApprovalService(),
+  healthService: HealthService,
+  approvalService: ApprovalService,
+  positionService: PositionService,
+  agentControlService: AgentControlService,
   replayController?: ReplayController,
 ): express.Express {
   const app = express();
@@ -84,13 +98,8 @@ export function createApp(
     try {
       const id = UuidSchema.parse(request.params.id);
       const approval = ApprovalRequestSchema.parse(request.body);
-      const signal = await approvalService.approve(id, approval);
       response.json(
-        SignalActionResultSchema.parse({
-          signal,
-          executionDeferred: true,
-          message: 'Approval passed current policy. Order execution is deferred to Phase 5.',
-        }),
+        ApprovalExecutionResultSchema.parse(await approvalService.approve(id, approval)),
       );
     } catch (error: unknown) {
       next(toHttpError(error));
@@ -100,14 +109,59 @@ export function createApp(
   app.post('/signals/:id/reject', async (request, response, next) => {
     try {
       const id = UuidSchema.parse(request.params.id);
-      const signal = await approvalService.reject(id);
+      const rejection = RejectSignalRequestSchema.parse(request.body ?? {});
+      const signal = await approvalService.reject(id, rejection.reason);
       response.json(
-        SignalActionResultSchema.parse({
+        RejectSignalResultSchema.parse({
           signal,
-          executionDeferred: true,
-          message: 'Signal rejected. No order was created.',
+          message: 'Signal rejected permanently. No order was created.',
         }),
       );
+    } catch (error: unknown) {
+      next(toHttpError(error));
+    }
+  });
+
+  app.get('/positions', async (_request, response, next) => {
+    try {
+      response.json(PositionListResponseSchema.parse(await positionService.list()));
+    } catch (error: unknown) {
+      next(toHttpError(error));
+    }
+  });
+
+  app.get('/positions/:id', async (request, response, next) => {
+    try {
+      const id = UuidSchema.parse(request.params.id);
+      const position = await positionService.get(id);
+      if (!position) throw new HttpError(404, 'POSITION_NOT_FOUND', 'Position was not found');
+      response.json(PositionDetailSchema.parse(position));
+    } catch (error: unknown) {
+      next(toHttpError(error));
+    }
+  });
+
+  app.post('/positions/:id/close', async (request, response, next) => {
+    try {
+      const id = UuidSchema.parse(request.params.id);
+      response.json(ClosePositionResultSchema.parse(await positionService.close(id)));
+    } catch (error: unknown) {
+      next(toHttpError(error));
+    }
+  });
+
+  app.get('/agent/control', async (_request, response, next) => {
+    try {
+      response.json(AgentControlStateSchema.parse(await agentControlService.get()));
+    } catch (error: unknown) {
+      next(toHttpError(error));
+    }
+  });
+
+  app.post('/agent/kill-switch', async (request, response, next) => {
+    try {
+      const update = KillSwitchUpdateRequestSchema.parse(request.body);
+      response.json(AgentControlStateSchema.parse(await agentControlService.setKillSwitch(update)));
     } catch (error: unknown) {
       next(toHttpError(error));
     }
@@ -176,10 +230,33 @@ export function createApp(
 }
 
 function toHttpError(error: unknown): unknown {
-  if (!(error instanceof SignalActionError)) return error;
-  const status = error.code.endsWith('NOT_FOUND') ? 404 : 409;
-  return new HttpError(status, error.code, error.message, {
-    ...(error.field ? { field: error.field } : {}),
-    ...(error.risk ? { risk: error.risk } : {}),
-  });
+  if (error instanceof SignalActionError) {
+    const adapterCodes = new Set([
+      'PRICE_UNAVAILABLE',
+      'ORDER_REJECTED',
+      'POSITION_NOT_FOUND',
+      'POSITION_ALREADY_CLOSED',
+      'ADAPTER_UNAVAILABLE',
+      'ADAPTER_FAILURE',
+    ]);
+    const status = error.code.endsWith('NOT_FOUND')
+      ? 404
+      : error.code === 'EXECUTION_FAILED' || adapterCodes.has(error.code)
+        ? 502
+        : 409;
+    return new HttpError(status, error.code, error.message, {
+      ...(error.field ? { field: error.field } : {}),
+      ...(error.risk ? { risk: error.risk } : {}),
+      ...error.details,
+    });
+  }
+  if (error instanceof PositionActionError) {
+    const status =
+      error.code === 'POSITION_NOT_FOUND' ? 404 : error.code.endsWith('FAILED') ? 502 : 409;
+    return new HttpError(status, error.code, error.message, error.details);
+  }
+  if (error instanceof AgentControlError) {
+    return new HttpError(404, error.code, error.message);
+  }
+  return error;
 }

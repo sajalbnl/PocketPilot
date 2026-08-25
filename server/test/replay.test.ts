@@ -14,6 +14,8 @@ describe('Replay Mode', () => {
       'pm-btc-100000',
       'hl-btc-100500',
       'pm-btc-100500',
+      'hl-btc-mark-100600',
+      'hl-btc-mark-100700',
     ]);
     expect(second).toEqual(first);
   });

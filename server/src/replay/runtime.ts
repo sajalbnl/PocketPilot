@@ -5,10 +5,15 @@ import type { InvestorSkill } from '../skill/schema.js';
 import { createReasoningProvider } from '../reasoning/factory.js';
 import { SignalReasoningService } from '../reasoning/service.js';
 import { ReplayController } from './controller.js';
+import type { NormalizedMarketSample } from '@pocketpilot/shared';
 
 export async function createReplayController(
   loadedSkill?: InvestorSkill,
   reasoningService = new SignalReasoningService(createReasoningProvider()),
+  marketObserver?: {
+    ingest(sample: NormalizedMarketSample): void;
+    reset(): void;
+  },
 ): Promise<ReplayController> {
   const skill = loadedSkill ?? (await loadInvestorSkill());
   const mandate = await getCurrentMandate();
@@ -30,5 +35,7 @@ export async function createReplayController(
       },
     },
     resetReplayCandidates,
+    (sample) => marketObserver?.ingest(sample),
+    () => marketObserver?.reset(),
   );
 }

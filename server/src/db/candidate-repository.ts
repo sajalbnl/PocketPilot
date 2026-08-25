@@ -1,8 +1,8 @@
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, eq, isNotNull, notExists } from 'drizzle-orm';
 
 import type { CandidateSignal } from '../signal/evaluate.js';
 import { db } from './client.js';
-import { signals } from './schema.js';
+import { orders, signals } from './schema.js';
 
 export interface CandidatePersistenceResult {
   signalId: string;
@@ -54,7 +54,13 @@ export async function persistCandidate(
 export async function resetReplayCandidates(): Promise<number> {
   const deleted = await db
     .delete(signals)
-    .where(and(eq(signals.dataMode, 'replay'), isNotNull(signals.candidateKey)))
+    .where(
+      and(
+        eq(signals.dataMode, 'replay'),
+        isNotNull(signals.candidateKey),
+        notExists(db.select({ id: orders.id }).from(orders).where(eq(orders.signalId, signals.id))),
+      ),
+    )
     .returning({ id: signals.id });
   return deleted.length;
 }

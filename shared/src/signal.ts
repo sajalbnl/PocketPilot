@@ -207,3 +207,11 @@ export const SignalActionResultSchema = z
   })
   .strict();
 export type SignalActionResult = z.infer<typeof SignalActionResultSchema>;
+
+export const RejectSignalResultSchema = z
+  .object({
+    signal: SignalDetailSchema,
+    message: z.string().min(1),
+  })
+  .strict();
+export type RejectSignalResult = z.infer<typeof RejectSignalResultSchema>;

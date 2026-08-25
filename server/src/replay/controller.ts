@@ -1,4 +1,5 @@
 import type { InvestorSkill } from '../skill/schema.js';
+import type { NormalizedMarketSample } from '@pocketpilot/shared';
 import { MarketSignalPipeline, type CandidateSink } from '../signal/pipeline.js';
 import { ReplayClock } from './clock.js';
 import { ReplayFixtureSource, type ReplayFixtureName } from './fixture-source.js';
@@ -41,6 +42,8 @@ export class ReplayController {
     private readonly skill: InvestorSkill,
     private readonly sink: CandidateSink,
     private readonly resetCandidates: () => Promise<number>,
+    private readonly observeMarketSample: (sample: NormalizedMarketSample) => void = () => {},
+    private readonly resetMarketState: () => void = () => {},
   ) {}
 
   status(): ReplayStatus {
@@ -56,6 +59,7 @@ export class ReplayController {
     this.source = await ReplayFixtureSource.open(input.fixture);
     this.events = await this.source.load();
     this.clock = new ReplayClock();
+    this.resetMarketState();
     this.pipeline = new MarketSignalPipeline(this.skill, this.source.id, this.sink);
     this.statusValue = {
       state: 'ready',
@@ -121,6 +125,7 @@ export class ReplayController {
     this.events = [];
     this.pipeline = null;
     this.clock = new ReplayClock();
+    this.resetMarketState();
     this.statusValue = {
       ...this.statusValue,
       state: 'idle',
@@ -142,6 +147,7 @@ export class ReplayController {
     if (!event || !this.pipeline) throw new Error('Replay cursor is outside the loaded fixture');
     await this.clock.advanceTo(new Date(event.sourceTimestamp), this.statusValue.speed);
     const result = await this.pipeline.ingest(event);
+    this.observeMarketSample(result.normalized);
     this.statusValue.cursor += 1;
     this.statusValue.clock = this.clock.now()?.toISOString() ?? null;
     if (result.persisted) {

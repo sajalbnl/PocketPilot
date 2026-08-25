@@ -30,3 +30,19 @@ export const MandateSchema = z
   })
   .strict();
 export type Mandate = z.infer<typeof MandateSchema>;
+
+export const AgentControlStateSchema = z
+  .object({
+    mandateId: UuidSchema,
+    agentName: z.string().min(1),
+    killSwitchEnabled: z.boolean(),
+    mandateVersion: z.number().int().positive(),
+    updatedAt: UtcDateTimeSchema,
+  })
+  .strict();
+export type AgentControlState = z.infer<typeof AgentControlStateSchema>;
+
+export const KillSwitchUpdateRequestSchema = z
+  .object({ enabled: z.boolean(), confirmed: z.literal(true) })
+  .strict();
+export type KillSwitchUpdateRequest = z.infer<typeof KillSwitchUpdateRequestSchema>;

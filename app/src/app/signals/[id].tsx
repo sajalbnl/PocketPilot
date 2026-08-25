@@ -319,7 +319,7 @@ function inactiveReason(signal: SignalDetail, expiredByTime: boolean): string {
   if (signal.state === 'FILLED' || signal.state === 'CLOSED')
     return 'This signal has already executed.';
   if (signal.state === 'APPROVED' || signal.state === 'EXECUTING')
-    return 'Approval passed current policy; Phase 5 will own idempotent execution.';
+    return 'This approval is being executed by the server authority.';
   return `This signal is ${signal.state.toLowerCase().replaceAll('_', ' ')} and is not approvable.`;
 }
 

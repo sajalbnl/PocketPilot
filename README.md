@@ -1,9 +1,9 @@
 # pocketpilot
 
-pocketpilot is an Android-first control surface for a finance agent. Phase 4 carries deterministic
-Replay Mode candidates across a strict advisory LLM boundary, validates evidence-grounded output,
-and applies deterministic policy before and during mobile approval. Notifications, orders, and
-execution remain later phases.
+pocketpilot is an Android-first control surface for a finance agent. Phase 5 closes the guaranteed
+paper path: deterministic Replay Mode produces an evidence-bound proposal, current policy controls
+approval, one idempotent paper order creates one position, PnL is marked through normalized replay
+prices, closing records realized PnL, and a persisted kill switch blocks new execution.
 
 ## Prerequisites
 
@@ -21,20 +21,22 @@ cp app/.env.example app/.env
 
 The example environment uses local PostgreSQL and safe prototype modes:
 
-| Variable          | Allowed/example value                                       | Required                  |
-| ----------------- | ----------------------------------------------------------- | ------------------------- |
-| `DATABASE_URL`    | `postgresql://postgres:postgres@localhost:5432/pocketpilot` | yes                       |
-| `PORT`            | `3000`                                                      | defaults to `3000`        |
-| `APP_BASE_URL`    | `http://localhost:3000`                                     | defaults locally          |
-| `DATA_MODE`       | `replay` or `live`                                          | defaults to `replay`      |
-| `EXECUTION_MODE`  | `paper` or `hyperliquid-testnet`                            | defaults to `paper`       |
-| `NODE_ENV`        | `development`, `test`, or `production`                      | defaults to `development` |
-| `LLM_PROVIDER`    | `fixture` or `openai`                                       | defaults to `fixture`     |
-| `LLM_MODEL`       | OpenAI model with Structured Outputs support                | `gpt-4.1-mini`            |
-| `OPENAI_API_KEY`  | Server-side OpenAI project API key                          | only for `openai`         |
-| `OPENAI_BASE_URL` | `https://api.openai.com/v1`                                 | defaults to official API  |
-| `LLM_TIMEOUT_MS`  | Provider request timeout                                    | defaults to `20000`       |
-| `LLM_MAX_RETRIES` | Transient provider retries, `0` or `1`                      | defaults to `1`           |
+| Variable             | Allowed/example value                                       | Required                  |
+| -------------------- | ----------------------------------------------------------- | ------------------------- |
+| `DATABASE_URL`       | `postgresql://postgres:postgres@localhost:5432/pocketpilot` | yes                       |
+| `PORT`               | `3000`                                                      | defaults to `3000`        |
+| `APP_BASE_URL`       | `http://localhost:3000`                                     | defaults locally          |
+| `DATA_MODE`          | `replay` or `live`                                          | defaults to `replay`      |
+| `EXECUTION_MODE`     | `paper` or `hyperliquid-testnet`                            | defaults to `paper`       |
+| `NODE_ENV`           | `development`, `test`, or `production`                      | defaults to `development` |
+| `LLM_PROVIDER`       | `fixture` or `openai`                                       | defaults to `fixture`     |
+| `LLM_MODEL`          | OpenAI model with Structured Outputs support                | `gpt-4.1-mini`            |
+| `OPENAI_API_KEY`     | Server-side OpenAI project API key                          | only for `openai`         |
+| `OPENAI_BASE_URL`    | `https://api.openai.com/v1`                                 | defaults to official API  |
+| `LLM_TIMEOUT_MS`     | Provider request timeout                                    | defaults to `20000`       |
+| `LLM_MAX_RETRIES`    | Transient provider retries, `0` or `1`                      | defaults to `1`           |
+| `PAPER_FEE_BPS`      | Fee charged on entry and exit notional                      | defaults to `5`           |
+| `PAPER_SLIPPAGE_BPS` | Adverse paper market-fill slippage                          | defaults to `2`           |
 
 Never commit `.env`; only `.env.example` files are tracked. `LLM_PROVIDER=fixture` is deterministic,
 offline, and recommended for replay/tests. For the real provider, create a project API key in the
@@ -89,6 +91,11 @@ GET  /signals[?state=...][&category=...]
 GET  /signals/:id
 POST /signals/:id/approve
 POST /signals/:id/reject
+GET  /positions
+GET  /positions/:id
+POST /positions/:id/close
+GET  /agent/control
+POST /agent/kill-switch
 POST /dev/replay/start
 POST /dev/replay/step
 POST /dev/replay/reset
@@ -96,22 +103,44 @@ GET  /dev/replay/status
 ```
 
 Valid categories are `approval-required`, `monitoring`, `executed`, and `expired`. Approval accepts
-`approvalRevision`, `notionalUsd`, `leverage`, and `stopLossPrice`. Approval reruns current policy
-against edited terms and returns a typed policy preview on rejection. A passing request persists an
-`APPROVED` intent but explicitly defers order creation/execution to Phase 5.
+`approvalRevision`, `notionalUsd`, `leverage`, and `stopLossPrice`. Approval reruns current policy,
+locks the signal and mandate, derives `signalId:approval-rN`, and creates at most one filled order
+and position. The position endpoint marks open PnL and the app polls it every 10 seconds.
 
-## Replay demo
+## Clean Phase 5 replay demo
 
 ```bash
-npm run replay:reset
-npm run replay -- --fixture btc-trigger --speed 0
+docker compose up -d db
+npm run db:migrate
+npm run db:seed
+npm run demo:reset
+npm run dev:server
 ```
 
-Open **Approval Required** in the mobile app and select the generated BTC signal. It exposes source
-snapshots, grounded AI reasoning, numeric features, triggered rule IDs, individual deterministic
-risk checks, prompt/model metadata, and the timeline. Entering `$150` reaches the backend and fails
-`maximum-notional`; correcting it to `$100` passes policy and becomes ready for Phase 5. See
-`docs/replay-runbook.md` for speed, stepping, the no-trigger fixture, and formulas.
+In a second terminal, advance exactly through the trigger and leave the two post-trigger marks for
+the position screen:
+
+```bash
+curl -X POST http://localhost:3000/dev/replay/start -H 'content-type: application/json' -d '{"fixture":"btc-trigger","speed":0,"stepOnly":true}'
+curl -X POST http://localhost:3000/dev/replay/step
+curl -X POST http://localhost:3000/dev/replay/step
+curl -X POST http://localhost:3000/dev/replay/step
+```
+
+Start the app with `npm run dev:app`. Open **Approval Required**, open BTC, enter `$150` and observe
+the exact maximum-notional rejection. Correct it to `$100`; approval creates one fill and routes to
+the position. Advance one replay step to mark `$66,500`, wait for the 10-second poll, then advance
+again to `$65,500` to see directionally changing PnL. Close the position from the phone.
+
+Create the next approvable signal while execution is enabled, then enable the confirmed kill switch
+in the inbox and attempt approval:
+
+```bash
+curl -X POST http://localhost:3000/dev/replay/start -H 'content-type: application/json' -d '{"fixture":"btc-followup","speed":0,"stepOnly":false}'
+```
+
+The server returns `KILL_SWITCH_ENABLED`; it does not close the existing position. See
+`docs/paper-execution.md` for the fill/PnL contract and `docs/replay-runbook.md` for replay details.
 
 ## Checks
 
@@ -120,6 +149,7 @@ npm run typecheck
 npm run lint
 npm run format:check
 npm test
+RUN_DB_INTEGRATION=1 npm run test -w @pocketpilot/server
 npm run build
 ```
 
