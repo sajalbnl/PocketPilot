@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 
 export const queryKeys = {
+  config: ['config'] as const,
   signals: ['signals'] as const,
   signalLists: (category: SignalCategory) => ['signals', 'list', category] as const,
   signal: (id: string) => ['signals', 'detail', id] as const,
@@ -12,6 +13,10 @@ export const queryKeys = {
   position: (id: string) => ['positions', 'detail', id] as const,
   agentControl: ['agent', 'control'] as const,
 };
+
+export function useRuntimeConfig() {
+  return useQuery({ queryKey: queryKeys.config, queryFn: api.getConfig, staleTime: 60_000 });
+}
 
 export function useSignals(category: SignalCategory) {
   return useQuery({

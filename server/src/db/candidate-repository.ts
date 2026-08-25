@@ -12,6 +12,7 @@ export interface CandidatePersistenceResult {
 export async function persistCandidate(
   mandateId: string,
   candidate: CandidateSignal,
+  dataMode: 'replay' | 'live' = 'replay',
 ): Promise<CandidatePersistenceResult> {
   const detectedAt = new Date(candidate.detectedAt);
   const inserted = await db
@@ -22,7 +23,7 @@ export async function persistCandidate(
       symbol: candidate.symbol,
       side: candidate.side,
       state: 'DETECTED',
-      dataMode: 'replay',
+      dataMode,
       skillId: candidate.skillId,
       skillVersion: candidate.skillVersion,
       candidateKey: candidate.candidateKey,
@@ -33,7 +34,7 @@ export async function persistCandidate(
           fromState: null,
           toState: 'DETECTED',
           occurredAt: candidate.detectedAt,
-          reason: 'Deterministic Investor Skill thresholds matched replay evidence',
+          reason: `Deterministic Investor Skill thresholds matched ${dataMode} evidence`,
           metadata: {
             replayId: candidate.replayId,
             skillId: candidate.skillId,

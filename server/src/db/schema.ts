@@ -1,6 +1,8 @@
 import type {
   CompactError,
   LlmDecisionOutput,
+  NotificationDelivery,
+  PushTokenRegistration,
   ReasoningMetadata,
   RiskPreview,
   SignalEvidence,
@@ -65,6 +67,7 @@ export const mandates = pgTable(
     approvalRequired: boolean('approval_required').notNull(),
     signalExpiryMinutes: integer('signal_expiry_minutes').notNull(),
     killSwitchEnabled: boolean('kill_switch_enabled').notNull().default(false),
+    pushTokens: jsonb('push_tokens').$type<PushTokenRegistration[]>().notNull().default([]),
     version: integer('version').notNull().default(1),
     ...timestamps,
   },
@@ -110,6 +113,7 @@ export const signals = pgTable(
     stopLossPrice: numeric('stop_loss_price', { precision: 24, scale: 8, mode: 'number' }),
     expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }),
     timeline: jsonb('timeline').$type<SignalTimelineEntry[]>().notNull().default([]),
+    notification: jsonb('notification').$type<NotificationDelivery | null>(),
     ...timestamps,
   },
   (table) => [

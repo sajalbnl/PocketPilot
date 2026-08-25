@@ -34,6 +34,8 @@ export function calculateFeatureSnapshot(input: {
   replayId: string;
   hyperliquid: readonly HyperliquidMarketSample[];
   polymarket: readonly PolymarketMarketSample[];
+  freshnessSeconds?: number;
+  alignmentSeconds?: number;
 }): FeatureSnapshot {
   const windowMinutes = Math.max(
     ...Object.values(input.skill.features).map((definition) => definition.window_minutes),
@@ -62,9 +64,23 @@ export function calculateFeatureSnapshot(input: {
   const firstPm = polymarket[0];
   const lastPm = polymarket.at(-1);
 
+  const freshnessSeconds = input.freshnessSeconds ?? 120;
+  const alignmentSeconds = input.alignmentSeconds ?? freshnessSeconds;
+  const sourceAlignmentSeconds =
+    lastHl && lastPm ? Math.abs(timestamp(lastHl) - timestamp(lastPm)) / 1_000 : null;
+  const latestSamplesAreFresh =
+    lastHl !== undefined &&
+    lastPm !== undefined &&
+    asOfMs - timestamp(lastHl) <= freshnessSeconds * 1_000 &&
+    asOfMs - timestamp(lastPm) <= freshnessSeconds * 1_000;
+  const latestSamplesAreAligned =
+    sourceAlignmentSeconds !== null && sourceAlignmentSeconds <= alignmentSeconds;
+
   const enoughEvidence =
     hyperliquid.length >= input.skill.evidence.minimum_hyperliquid_samples &&
-    polymarket.length >= input.skill.evidence.minimum_polymarket_samples;
+    polymarket.length >= input.skill.evidence.minimum_polymarket_samples &&
+    latestSamplesAreFresh &&
+    latestSamplesAreAligned;
   const sourceRecencySeconds =
     lastHl && lastPm
       ? round(Math.max(asOfMs - timestamp(lastHl), asOfMs - timestamp(lastPm)) / 1_000)

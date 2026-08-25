@@ -30,7 +30,14 @@ export function normalizeMarketEvent(event: RawMarketEvent): NormalizedMarketSam
       openInterestUsd: openInterestCoins * markPrice,
       sourceTimestamp: event.sourceTimestamp,
       ingestedAt: event.ingestedAt,
-      metadata: { channel: event.channel, normalizedContractVersion: 1 },
+      metadata: {
+        channel: event.channel,
+        normalizedContractVersion: 1,
+        ...(event.payload.sourceSymbol ? { sourceSymbol: event.payload.sourceSymbol } : {}),
+        ...(event.payload.timestampSource
+          ? { timestampSource: event.payload.timestampSource }
+          : {}),
+      },
     });
   }
 
@@ -52,6 +59,13 @@ export function normalizeMarketEvent(event: RawMarketEvent): NormalizedMarketSam
     liquidityUsd: finiteNumber(event.payload.liquidity, 'liquidity'),
     sourceTimestamp: event.sourceTimestamp,
     ingestedAt: event.ingestedAt,
-    metadata: { channel: event.channel, normalizedContractVersion: 1 },
+    metadata: {
+      channel: event.channel,
+      normalizedContractVersion: 1,
+      ...(event.payload.mapping_meaning ? { mappingMeaning: event.payload.mapping_meaning } : {}),
+      ...(event.payload.timestamp_source
+        ? { timestampSource: event.payload.timestamp_source }
+        : {}),
+    },
   });
 }

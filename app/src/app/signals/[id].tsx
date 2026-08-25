@@ -14,7 +14,7 @@ import {
 
 import { ApprovalSheet } from '../../components/ApprovalSheet';
 import { StateChip } from '../../components/SignalCard';
-import { readableError } from '../../lib/api';
+import { ApiClientError, readableError } from '../../lib/api';
 import { formatDateTime, formatPercent, formatUsd } from '../../lib/format';
 import { useMandate, useSignal } from '../../lib/queries';
 import { colors, radii } from '../../lib/theme';
@@ -32,10 +32,16 @@ export default function SignalDetailScreen() {
     );
   }
   if (signalQuery.isError) {
+    const missing =
+      signalQuery.error instanceof ApiClientError && signalQuery.error.code === 'SIGNAL_NOT_FOUND';
     return (
       <ScreenState
         title="Signal unavailable"
-        body={readableError(signalQuery.error)}
+        body={
+          missing
+            ? 'This signal no longer exists or the approval link is no longer valid. Return to the inbox for current server state.'
+            : readableError(signalQuery.error)
+        }
         retry={() => void signalQuery.refetch()}
       />
     );

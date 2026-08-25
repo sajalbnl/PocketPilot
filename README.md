@@ -1,9 +1,8 @@
 # pocketpilot
 
-pocketpilot is an Android-first control surface for a finance agent. Phase 5 closes the guaranteed
-paper path: deterministic Replay Mode produces an evidence-bound proposal, current policy controls
-approval, one idempotent paper order creates one position, PnL is marked through normalized replay
-prices, closing records realized PnL, and a persisted kill switch blocks new execution.
+pocketpilot is an Android-first control surface for a finance agent. Phase 6 adds real Expo push
+alerts and live Hyperliquid/Polymarket ingestion while preserving deterministic Replay Mode and
+paper execution as the guaranteed demo path.
 
 ## Prerequisites
 
@@ -37,6 +36,12 @@ The example environment uses local PostgreSQL and safe prototype modes:
 | `LLM_MAX_RETRIES`    | Transient provider retries, `0` or `1`                      | defaults to `1`           |
 | `PAPER_FEE_BPS`      | Fee charged on entry and exit notional                      | defaults to `5`           |
 | `PAPER_SLIPPAGE_BPS` | Adverse paper market-fill slippage                          | defaults to `2`           |
+
+Phase 6 adds `EXPO_ACCESS_TOKEN` (optional unless Expo push security is enabled), explicit
+Hyperliquid symbol mapping, explicit Polymarket market/outcome/meaning mapping, polling/reconnect
+controls, and 120-second freshness/alignment defaults. Every value is documented in `.env.example`;
+the exact provider contracts and Android credential steps are in
+[`docs/phase6-live-and-push.md`](docs/phase6-live-and-push.md).
 
 Never commit `.env`; only `.env.example` files are tracked. `LLM_PROVIDER=fixture` is deterministic,
 offline, and recommended for replay/tests. For the real provider, create a project API key in the
@@ -96,6 +101,8 @@ GET  /positions/:id
 POST /positions/:id/close
 GET  /agent/control
 POST /agent/kill-switch
+POST /devices/push-token
+GET  /ops/health
 POST /dev/replay/start
 POST /dev/replay/step
 POST /dev/replay/reset
@@ -141,6 +148,53 @@ curl -X POST http://localhost:3000/dev/replay/start -H 'content-type: applicatio
 
 The server returns `KILL_SWITCH_ENABLED`; it does not close the existing position. See
 `docs/paper-execution.md` for the fill/PnL contract and `docs/replay-runbook.md` for replay details.
+
+## Phase 6 Replay Mode with push
+
+Keep the safe defaults in `.env`:
+
+```bash
+DATA_MODE=replay
+EXECUTION_MODE=paper
+```
+
+Then run:
+
+```bash
+docker compose up -d db
+npm run db:migrate
+npm run db:seed
+npm run demo:reset
+npm run dev:server
+```
+
+On the configured physical-device development build, start the bundler with
+`npm run start:dev-client -w @pocketpilot/app`, enable Approval Alerts once, then start the fixture:
+
+```bash
+curl -X POST http://localhost:3000/dev/replay/start \
+  -H 'content-type: application/json' \
+  -d '{"fixture":"btc-trigger","speed":0,"stepOnly":false}'
+```
+
+The proposal transition sends at most one push. Tapping it opens the server-authoritative signal.
+
+## Live Mode
+
+Set `DATA_MODE=live`, leave `EXECUTION_MODE=paper`, and configure one to three current Polymarket
+IDs with explicit meaning, for example:
+
+```bash
+DATA_MODE=live
+EXECUTION_MODE=paper
+POLYMARKET_MARKETS_JSON='[{"marketId":"701502","asset":"BTC","outcome":"No","meaning":"Bitcoin remains above $45,000 through December 31, 2026"}]'
+npm run dev:server
+curl http://localhost:3000/ops/health
+```
+
+Live conditions are not expected to force a proposal. The health response proves both providers are
+receiving and normalizing data through the same downstream pipeline. Replay remains the recorded
+trade-trigger path.
 
 ## Checks
 

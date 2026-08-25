@@ -1,0 +1,15 @@
+{
+  "id": "123456",
+  "question": "Will Bitcoin be above $100,000 on December 31?",
+  "conditionId": "0x8f0b6c4d2a1e",
+  "outcomes": "[\"Yes\",\"No\"]",
+  "outcomePrices": "[\"0.61\",\"0.39\"]",
+  "clobTokenIds": "[\"1122334455\",\"9988776655\"]",
+  "oneDayPriceChange": 0.08,
+  "liquidity": "245000.25",
+  "liquidityNum": 245000.25,
+  "liquidityClob": 244990.5,
+  "active": true,
+  "closed": false,
+  "updatedAt": "2026-08-25T08:30:00Z"
+}

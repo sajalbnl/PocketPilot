@@ -1,0 +1,891 @@
+{
+  "id": "faffed9c-c818-42cc-8384-4ebc6dc2fade",
+  "prevId": "1ccc5c7e-a2ab-4d8b-840f-35b5e560049a",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.mandates": {
+      "name": "mandates",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "agent_name": {
+          "name": "agent_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "skill_slug": {
+          "name": "skill_slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "allowed_assets": {
+          "name": "allowed_assets",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "allowed_venues": {
+          "name": "allowed_venues",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_position_usd": {
+          "name": "max_position_usd",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_leverage": {
+          "name": "max_leverage",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "max_daily_loss_usd": {
+          "name": "max_daily_loss_usd",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stop_loss_required": {
+          "name": "stop_loss_required",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approval_required": {
+          "name": "approval_required",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "signal_expiry_minutes": {
+          "name": "signal_expiry_minutes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kill_switch_enabled": {
+          "name": "kill_switch_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "push_tokens": {
+          "name": "push_tokens",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "version": {
+          "name": "version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "mandates_max_position_positive": {
+          "name": "mandates_max_position_positive",
+          "value": "\"mandates\".\"max_position_usd\" > 0"
+        },
+        "mandates_max_leverage_positive": {
+          "name": "mandates_max_leverage_positive",
+          "value": "\"mandates\".\"max_leverage\" > 0"
+        },
+        "mandates_max_daily_loss_positive": {
+          "name": "mandates_max_daily_loss_positive",
+          "value": "\"mandates\".\"max_daily_loss_usd\" > 0"
+        },
+        "mandates_signal_expiry_positive": {
+          "name": "mandates_signal_expiry_positive",
+          "value": "\"mandates\".\"signal_expiry_minutes\" > 0"
+        },
+        "mandates_version_positive": {
+          "name": "mandates_version_positive",
+          "value": "\"mandates\".\"version\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.orders": {
+      "name": "orders",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "signal_id": {
+          "name": "signal_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approval_key": {
+          "name": "approval_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "client_order_id": {
+          "name": "client_order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "execution_mode": {
+          "name": "execution_mode",
+          "type": "execution_mode",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "venue_order_id": {
+          "name": "venue_order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "side": {
+          "name": "side",
+          "type": "trade_side",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notional_usd": {
+          "name": "notional_usd",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "leverage": {
+          "name": "leverage",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "requested_price": {
+          "name": "requested_price",
+          "type": "numeric(24, 8)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fill_price": {
+          "name": "fill_price",
+          "type": "numeric(24, 8)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "numeric(28, 12)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fee_usd": {
+          "name": "fee_usd",
+          "type": "numeric(18, 8)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "slippage_bps": {
+          "name": "slippage_bps",
+          "type": "numeric(10, 4)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "status": {
+          "name": "status",
+          "type": "order_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PENDING'"
+        },
+        "error": {
+          "name": "error",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "filled_at": {
+          "name": "filled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "orders_approval_key_uidx": {
+          "name": "orders_approval_key_uidx",
+          "columns": [
+            {
+              "expression": "approval_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "orders_client_order_id_uidx": {
+          "name": "orders_client_order_id_uidx",
+          "columns": [
+            {
+              "expression": "client_order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "orders_signal_id_idx": {
+          "name": "orders_signal_id_idx",
+          "columns": [
+            {
+              "expression": "signal_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "orders_signal_id_signals_id_fk": {
+          "name": "orders_signal_id_signals_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "signals",
+          "columnsFrom": [
+            "signal_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "orders_notional_positive": {
+          "name": "orders_notional_positive",
+          "value": "\"orders\".\"notional_usd\" > 0"
+        },
+        "orders_leverage_positive": {
+          "name": "orders_leverage_positive",
+          "value": "\"orders\".\"leverage\" > 0"
+        },
+        "orders_quantity_positive": {
+          "name": "orders_quantity_positive",
+          "value": "\"orders\".\"quantity\" IS NULL OR \"orders\".\"quantity\" > 0"
+        },
+        "orders_fee_nonnegative": {
+          "name": "orders_fee_nonnegative",
+          "value": "\"orders\".\"fee_usd\" >= 0"
+        },
+        "orders_slippage_nonnegative": {
+          "name": "orders_slippage_nonnegative",
+          "value": "\"orders\".\"slippage_bps\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.positions": {
+      "name": "positions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "symbol": {
+          "name": "symbol",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "side": {
+          "name": "side",
+          "type": "trade_side",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entry_price": {
+          "name": "entry_price",
+          "type": "numeric(24, 8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "current_price": {
+          "name": "current_price",
+          "type": "numeric(24, 8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "notional_usd": {
+          "name": "notional_usd",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "leverage": {
+          "name": "leverage",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "numeric(28, 12)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "stop_loss_price": {
+          "name": "stop_loss_price",
+          "type": "numeric(24, 8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entry_fee_usd": {
+          "name": "entry_fee_usd",
+          "type": "numeric(18, 8)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "exit_fee_usd": {
+          "name": "exit_fee_usd",
+          "type": "numeric(18, 8)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "close_client_order_id": {
+          "name": "close_client_order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "close_venue_order_id": {
+          "name": "close_venue_order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "close_price": {
+          "name": "close_price",
+          "type": "numeric(24, 8)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unrealized_pnl": {
+          "name": "unrealized_pnl",
+          "type": "numeric(18, 8)",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "realized_pnl": {
+          "name": "realized_pnl",
+          "type": "numeric(18, 8)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "position_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'OPEN'"
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "positions_order_id_uidx": {
+          "name": "positions_order_id_uidx",
+          "columns": [
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "positions_close_client_order_id_uidx": {
+          "name": "positions_close_client_order_id_uidx",
+          "columns": [
+            {
+              "expression": "close_client_order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "positions_order_id_orders_id_fk": {
+          "name": "positions_order_id_orders_id_fk",
+          "tableFrom": "positions",
+          "tableTo": "orders",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "positions_prices_positive": {
+          "name": "positions_prices_positive",
+          "value": "\"positions\".\"entry_price\" > 0 AND \"positions\".\"current_price\" > 0 AND \"positions\".\"stop_loss_price\" > 0"
+        },
+        "positions_notional_positive": {
+          "name": "positions_notional_positive",
+          "value": "\"positions\".\"notional_usd\" > 0"
+        },
+        "positions_leverage_positive": {
+          "name": "positions_leverage_positive",
+          "value": "\"positions\".\"leverage\" > 0"
+        },
+        "positions_quantity_positive": {
+          "name": "positions_quantity_positive",
+          "value": "\"positions\".\"quantity\" > 0"
+        },
+        "positions_entry_fee_nonnegative": {
+          "name": "positions_entry_fee_nonnegative",
+          "value": "\"positions\".\"entry_fee_usd\" >= 0"
+        },
+        "positions_exit_fee_nonnegative": {
+          "name": "positions_exit_fee_nonnegative",
+          "value": "\"positions\".\"exit_fee_usd\" IS NULL OR \"positions\".\"exit_fee_usd\" >= 0"
+        },
+        "positions_close_price_positive": {
+          "name": "positions_close_price_positive",
+          "value": "\"positions\".\"close_price\" IS NULL OR \"positions\".\"close_price\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.signals": {
+      "name": "signals",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "mandate_id": {
+          "name": "mandate_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "symbol": {
+          "name": "symbol",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "side": {
+          "name": "side",
+          "type": "trade_side",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "state": {
+          "name": "state",
+          "type": "signal_state",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'DETECTED'"
+        },
+        "data_mode": {
+          "name": "data_mode",
+          "type": "data_mode",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "skill_id": {
+          "name": "skill_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'cross-market-catalyst'"
+        },
+        "skill_version": {
+          "name": "skill_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "candidate_key": {
+          "name": "candidate_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "market_snapshot": {
+          "name": "market_snapshot",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "triggered_rules": {
+          "name": "triggered_rules",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "llm_output": {
+          "name": "llm_output",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "llm_metadata": {
+          "name": "llm_metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reasoning_error": {
+          "name": "reasoning_error",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "risk_preview": {
+          "name": "risk_preview",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "proposed_notional_usd": {
+          "name": "proposed_notional_usd",
+          "type": "numeric(18, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "proposed_leverage": {
+          "name": "proposed_leverage",
+          "type": "numeric(8, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stop_loss_price": {
+          "name": "stop_loss_price",
+          "type": "numeric(24, 8)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "timeline": {
+          "name": "timeline",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "notification": {
+          "name": "notification",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "signals_mandate_id_idx": {
+          "name": "signals_mandate_id_idx",
+          "columns": [
+            {
+              "expression": "mandate_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "signals_state_idx": {
+          "name": "signals_state_idx",
+          "columns": [
+            {
+              "expression": "state",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "signals_candidate_key_uidx": {
+          "name": "signals_candidate_key_uidx",
+          "columns": [
+            {
+              "expression": "candidate_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "signals_mandate_id_mandates_id_fk": {
+          "name": "signals_mandate_id_mandates_id_fk",
+          "tableFrom": "signals",
+          "tableTo": "mandates",
+          "columnsFrom": [
+            "mandate_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "signals_skill_version_positive": {
+          "name": "signals_skill_version_positive",
+          "value": "\"signals\".\"skill_version\" > 0"
+        },
+        "signals_timeline_is_array": {
+          "name": "signals_timeline_is_array",
+          "value": "jsonb_typeof(\"signals\".\"timeline\") = 'array'"
+        },
+        "signals_triggered_rules_is_array": {
+          "name": "signals_triggered_rules_is_array",
+          "value": "jsonb_typeof(\"signals\".\"triggered_rules\") = 'array'"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.data_mode": {
+      "name": "data_mode",
+      "schema": "public",
+      "values": [
+        "replay",
+        "live"
+      ]
+    },
+    "public.execution_mode": {
+      "name": "execution_mode",
+      "schema": "public",
+      "values": [
+        "paper",
+        "hyperliquid-testnet"
+      ]
+    },
+    "public.order_status": {
+      "name": "order_status",
+      "schema": "public",
+      "values": [
+        "PENDING",
+        "SUBMITTED",
+        "FILLED",
+        "FAILED",
+        "CANCELLED"
+      ]
+    },
+    "public.position_status": {
+      "name": "position_status",
+      "schema": "public",
+      "values": [
+        "OPEN",
+        "CLOSED"
+      ]
+    },
+    "public.signal_state": {
+      "name": "signal_state",
+      "schema": "public",
+      "values": [
+        "DETECTED",
+        "ANALYZING",
+        "PROPOSED",
+        "PENDING_APPROVAL",
+        "APPROVED",
+        "EXECUTING",
+        "FILLED",
+        "CLOSED",
+        "NO_TRADE",
+        "REJECTED",
+        "RISK_BLOCKED",
+        "EXPIRED",
+        "EXECUTION_FAILED"
+      ]
+    },
+    "public.trade_side": {
+      "name": "trade_side",
+      "schema": "public",
+      "values": [
+        "LONG",
+        "SHORT"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

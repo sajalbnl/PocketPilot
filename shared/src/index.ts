@@ -3,6 +3,7 @@ export * from './enums.js';
 export * from './execution.js';
 export * from './mandate.js';
 export * from './market.js';
+export * from './notification.js';
 export * from './primitives.js';
 export * from './signal.js';
 export * from './state-machine.js';

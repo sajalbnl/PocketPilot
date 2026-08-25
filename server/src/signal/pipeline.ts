@@ -32,12 +32,14 @@ export class MarketSignalPipeline {
     private readonly skill: InvestorSkill,
     private readonly replayId: string,
     private readonly sink: CandidateSink,
+    private readonly timing: { freshnessSeconds?: number; alignmentSeconds?: number } = {},
   ) {}
 
   async ingest(event: RawMarketEvent): Promise<PipelineEventResult> {
     const normalized = normalizeMarketEvent(event);
     if (normalized.source === 'hyperliquid') this.hyperliquid.push(normalized);
     else this.polymarket.push(normalized);
+    this.pruneHistory(new Date(normalized.sourceTimestamp).getTime());
 
     const asset: Asset =
       normalized.source === 'hyperliquid' ? normalized.symbol : normalized.relevantAsset;
@@ -48,6 +50,7 @@ export class MarketSignalPipeline {
       replayId: this.replayId,
       hyperliquid: this.hyperliquid,
       polymarket: this.polymarket,
+      ...this.timing,
     });
     const evaluation = evaluateSkill(this.skill, snapshot, this.replayId);
     let persisted: PipelineEventResult['persisted'] = null;
@@ -63,5 +66,19 @@ export class MarketSignalPipeline {
       candidate: evaluation.candidate,
       persisted,
     };
+  }
+
+  private pruneHistory(asOfMs: number): void {
+    const featureWindowMs =
+      Math.max(
+        ...Object.values(this.skill.features).map((definition) => definition.window_minutes),
+      ) * 60_000;
+    const safetyWindowMs =
+      Math.max(this.timing.freshnessSeconds ?? 120, this.timing.alignmentSeconds ?? 120) * 1_000;
+    const cutoff = asOfMs - featureWindowMs - safetyWindowMs;
+    const keep = (sample: { sourceTimestamp: string }) =>
+      new Date(sample.sourceTimestamp).getTime() >= cutoff;
+    this.hyperliquid.splice(0, this.hyperliquid.length, ...this.hyperliquid.filter(keep));
+    this.polymarket.splice(0, this.polymarket.length, ...this.polymarket.filter(keep));
   }
 }

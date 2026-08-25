@@ -9,13 +9,19 @@ import { PositionService } from './domain/position-service.js';
 import { PaperExecutionAdapter } from './execution/paper-adapter.js';
 import { createApp } from './http/app.js';
 import { MarketPriceService, NormalizedMarketState } from './market/price-service.js';
+import { createLiveIngestionController } from './live/controller.js';
+import { ExpoPushClient } from './notification/expo-client.js';
+import { PostgresNotificationRepository } from './notification/repository.js';
+import { NotificationService } from './notification/service.js';
+import { createReasoningProvider } from './reasoning/factory.js';
+import { SignalReasoningService } from './reasoning/service.js';
 import { createReplayController } from './replay/runtime.js';
 import { loadInvestorSkill } from './skill/loader.js';
 
 const investorSkill = await loadInvestorSkill();
 if (env.EXECUTION_MODE !== 'paper') {
   throw new Error(
-    'Hyperliquid testnet execution is reserved for Phase 6; set EXECUTION_MODE=paper for Phase 5',
+    'Hyperliquid testnet execution is reserved for Phase 7; set EXECUTION_MODE=paper',
   );
 }
 const marketState = new NormalizedMarketState();
@@ -27,9 +33,22 @@ const executionAdapter = new PaperExecutionAdapter(priceService, {
 const approvalService = new ApprovalService(executionAdapter);
 const positionService = new PositionService(executionAdapter);
 const agentControlService = new AgentControlService();
+const notificationService = new NotificationService(
+  new PostgresNotificationRepository(),
+  new ExpoPushClient({
+    url: env.EXPO_PUSH_URL,
+    accessToken: env.EXPO_ACCESS_TOKEN,
+    timeoutMs: env.EXPO_PUSH_TIMEOUT_MS,
+  }),
+);
+const reasoningService = new SignalReasoningService(createReasoningProvider(), notificationService);
 const replayController =
   env.DATA_MODE === 'replay'
-    ? await createReplayController(investorSkill, undefined, marketState)
+    ? await createReplayController(investorSkill, reasoningService, marketState)
+    : undefined;
+const liveController =
+  env.DATA_MODE === 'live'
+    ? await createLiveIngestionController(investorSkill, reasoningService, marketState)
     : undefined;
 const server = createServer(
   createApp(
@@ -38,6 +57,16 @@ const server = createServer(
     positionService,
     agentControlService,
     replayController,
+    () => ({
+      dataMode: env.DATA_MODE,
+      ingestion: liveController?.health() ??
+        replayController?.status() ?? { status: 'unavailable' },
+      notifications: notificationService.health(),
+      freshness: {
+        maximumAgeSeconds: env.MARKET_FRESHNESS_SECONDS,
+        maximumAlignmentSeconds: env.MARKET_ALIGNMENT_SECONDS,
+      },
+    }),
   ),
 );
 let shuttingDown = false;
@@ -45,6 +74,7 @@ let shuttingDown = false;
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
+  liveController?.stop();
 
   console.log(`${signal} received; shutting down gracefully`);
 
@@ -72,6 +102,12 @@ server.listen(env.PORT, () => {
   console.log(
     `pocketpilot server listening on port ${env.PORT} (${env.DATA_MODE}/${env.EXECUTION_MODE})`,
   );
+  liveController?.start();
+  if (env.DATA_MODE === 'live' && env.POLYMARKET_MARKETS_JSON.length === 0) {
+    console.warn(
+      'Live Polymarket ingestion is disabled until POLYMARKET_MARKETS_JSON is configured',
+    );
+  }
 });
 
 server.on('error', (error) => {

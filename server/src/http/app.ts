@@ -8,6 +8,8 @@ import {
   MandateSchema,
   PositionDetailSchema,
   PositionListResponseSchema,
+  RegisterPushTokenRequestSchema,
+  RegisterPushTokenResultSchema,
   RejectSignalRequestSchema,
   RejectSignalResultSchema,
   SignalDetailSchema,
@@ -19,6 +21,7 @@ import {
 import { env } from '../config/env.js';
 import { getCurrentMandate } from '../db/mandate-repository.js';
 import { getSignal, listSignals } from '../db/signal-repository.js';
+import { registerPushToken } from '../notification/repository.js';
 import { SignalActionError } from '../domain/approval-service.js';
 import type { ApprovalService } from '../domain/approval-service.js';
 import { AgentControlError } from '../domain/agent-control-service.js';
@@ -37,6 +40,7 @@ export function createApp(
   positionService: PositionService,
   agentControlService: AgentControlService,
   replayController?: ReplayController,
+  operationsHealth?: () => unknown,
 ): express.Express {
   const app = express();
 
@@ -62,6 +66,28 @@ export function createApp(
       executionMode: env.EXECUTION_MODE,
       serverTime: new Date().toISOString(),
     });
+  });
+
+  app.get('/ops/health', (_request, response) => {
+    response.json(
+      operationsHealth?.() ?? {
+        dataMode: env.DATA_MODE,
+        ingestion: { status: 'unavailable' },
+        notifications: { status: 'unavailable' },
+      },
+    );
+  });
+
+  app.post('/devices/push-token', async (request, response, next) => {
+    try {
+      const registration = RegisterPushTokenRequestSchema.parse(request.body);
+      const tokenCount = await registerPushToken(registration);
+      response
+        .status(201)
+        .json(RegisterPushTokenResultSchema.parse({ registered: true, tokenCount }));
+    } catch (error: unknown) {
+      next(error);
+    }
   });
 
   app.get('/mandate', async (_request, response, next) => {

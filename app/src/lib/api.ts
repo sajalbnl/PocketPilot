@@ -6,6 +6,8 @@ import {
   MandateSchema,
   PositionDetailSchema,
   PositionListResponseSchema,
+  RegisterPushTokenResultSchema,
+  RuntimeConfigSchema,
   RejectSignalResultSchema,
   SignalDetailSchema,
   SignalListResponseSchema,
@@ -17,6 +19,9 @@ import {
   type Mandate,
   type PositionDetail,
   type PositionListResponse,
+  type RegisterPushTokenRequest,
+  type RegisterPushTokenResult,
+  type RuntimeConfig,
   type RejectSignalResult,
   type SignalCategory,
   type SignalDetail,
@@ -81,6 +86,15 @@ async function request<T>(path: string, schema: Parser<T>, init?: RequestInit): 
 }
 
 export const api = {
+  getConfig(): Promise<RuntimeConfig> {
+    return request('/config', RuntimeConfigSchema);
+  },
+  registerPushToken(registration: RegisterPushTokenRequest): Promise<RegisterPushTokenResult> {
+    return request('/devices/push-token', RegisterPushTokenResultSchema, {
+      method: 'POST',
+      body: JSON.stringify(registration),
+    });
+  },
   listSignals(category: SignalCategory): Promise<SignalListResponse> {
     return request(`/signals?category=${encodeURIComponent(category)}`, SignalListResponseSchema);
   },

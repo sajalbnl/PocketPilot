@@ -1,4 +1,4 @@
-# Phase 5 architecture
+# Phase 6 architecture
 
 ## Trust boundaries
 
@@ -99,3 +99,21 @@ locks that same row through its second policy check and paper fill, preventing a
 between the check and execution. The switch blocks new work but never closes a position.
 
 Paper fills and marking are specified in `docs/paper-execution.md`.
+
+## Push notification boundary
+
+Phase 6 keeps the four domain tables. A compact list of demo Expo tokens lives on the single
+mandate; one atomic delivery claim/result lives on its signal. The transition to
+`PENDING_APPROVAL` commits before notification delivery. Provider failure is observable but cannot
+roll back the signal. The notification carries only a signal ID and allowlisted app URL; the phone
+fetches current server state and cannot approve from notification data.
+
+## Live ingestion boundary
+
+Replay and live sources both emit strict source-shaped raw events into `MarketSignalPipeline`.
+Provider schemas and symbol/market meaning remain inside `server/src/live`; feature calculation,
+skill evaluation, reasoning, risk, persistence, paper fills, and marking remain shared. Live source
+health is a projection at `/ops/health`, not another persistence table. Missing, stale, or
+misaligned cross-venue evidence forces `evidence_completeness=0` before trigger evaluation.
+
+See `docs/phase6-live-and-push.md` for exact provider interfaces and operational setup.

@@ -15,6 +15,7 @@ import { signals } from '../db/schema.js';
 import { appendSignalTransition } from '../domain/signal-transition-service.js';
 import { evaluateRiskPolicy } from '../risk/engine.js';
 import type { InvestorSkill } from '../skill/schema.js';
+import type { PendingApprovalNotifier } from '../notification/service.js';
 import {
   buildReasoningContext,
   REASONING_INSTRUCTIONS,
@@ -26,7 +27,10 @@ import { ReasoningProviderError } from './provider.js';
 import { parseAndValidateDecision, ReasoningValidationError } from './validate.js';
 
 export class SignalReasoningService {
-  constructor(private readonly provider: ReasoningProvider) {}
+  constructor(
+    private readonly provider: ReasoningProvider,
+    private readonly notifier: PendingApprovalNotifier = { notifyPendingApproval: async () => {} },
+  ) {}
 
   async analyze(signalId: string, skill: InvestorSkill): Promise<void> {
     const [signal, mandate] = await Promise.all([getSignalRow(signalId), getCurrentMandate()]);
@@ -184,10 +188,14 @@ export class SignalReasoningService {
         : 'Preliminary deterministic risk policy blocked the advisory proposal',
       metadata: { failedRules: preview.rules.filter((rule) => !rule.passed).length },
     });
-    await db
+    const finalized = await db
       .update(signals)
       .set({ ...final, riskPreview: preview, updatedAt: new Date() })
-      .where(and(eq(signals.id, signal.id), eq(signals.state, 'PROPOSED')));
+      .where(and(eq(signals.id, signal.id), eq(signals.state, 'PROPOSED')))
+      .returning({ id: signals.id, state: signals.state });
+    if (finalized[0]?.state === 'PENDING_APPROVAL') {
+      await this.notifier.notifyPendingApproval(finalized[0].id);
+    }
   }
 
   private async failSafely(

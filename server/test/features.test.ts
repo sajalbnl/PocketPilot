@@ -71,4 +71,36 @@ describe('deterministic feature calculation', () => {
       ).candidate,
     ).toBeNull();
   });
+
+  it('suppresses a cross-venue candidate when evidence is missing, stale, or misaligned', async () => {
+    const { skill, source, snapshot } = await triggerSnapshot();
+    const stalePolymarket = snapshot.polymarketEvidence.map((sample, index) => ({
+      ...sample,
+      sourceTimestamp: index === 0 ? '2025-05-23T10:00:00.000Z' : '2025-05-23T10:02:00.000Z',
+    }));
+    const stale = calculateFeatureSnapshot({
+      skill,
+      asset: 'BTC',
+      asOf: new Date('2025-05-23T10:05:00.000Z'),
+      replayId: source.id,
+      hyperliquid: snapshot.hyperliquidEvidence,
+      polymarket: stalePolymarket,
+      freshnessSeconds: 120,
+      alignmentSeconds: 120,
+    });
+    expect(stale.values.evidence_completeness).toBe(0);
+    expect(stale.missingFeatures).toContain('evidence_completeness');
+    expect(evaluateSkill(skill, stale, source.id).candidate).toBeNull();
+
+    const missingVenue = calculateFeatureSnapshot({
+      skill,
+      asset: 'BTC',
+      asOf: new Date('2025-05-23T10:05:00.000Z'),
+      replayId: source.id,
+      hyperliquid: snapshot.hyperliquidEvidence,
+      polymarket: [],
+    });
+    expect(missingVenue.values.evidence_completeness).toBe(0);
+    expect(evaluateSkill(skill, missingVenue, source.id).candidate).toBeNull();
+  });
 });

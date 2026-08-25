@@ -17,6 +17,8 @@ export const RawHyperliquidEventSchema = ReplayEnvelopeSchema.extend({
       funding: z.string(),
       openInterest: z.string(),
       eventId: z.string().min(1),
+      sourceSymbol: z.string().min(1).optional(),
+      timestampSource: z.enum(['provider', 'adapter_receipt']).optional(),
     })
     .strict(),
 }).strict();
@@ -37,6 +39,8 @@ export const RawPolymarketEventSchema = ReplayEnvelopeSchema.extend({
       liquidity: z.string(),
       relevant_asset: z.enum(['BTC', 'ETH']),
       eventId: z.string().min(1),
+      mapping_meaning: z.string().min(1).optional(),
+      timestamp_source: z.enum(['provider', 'adapter_receipt']).optional(),
     })
     .strict(),
 }).strict();

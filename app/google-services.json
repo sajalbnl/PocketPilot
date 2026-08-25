@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "991932581677",
+    "project_id": "pocketpilot-6bed8",
+    "storage_bucket": "pocketpilot-6bed8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:991932581677:android:e6a8f8b408f438e34c75a4",
+        "android_client_info": {
+          "package_name": "com.sajalbansal.pocketpilot"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA3prS77XiX47VWFWQ9H9Du-DSOVmU68W8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

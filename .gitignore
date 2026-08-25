@@ -14,6 +14,10 @@ app/.expo/
 app/android/
 app/ios/
 app/expo-env.d.ts
+# Private Firebase/EAS service-account keys (never commit).
+**/firebase-service-account*.json
+**/*firebase-adminsdk*.json
+**/*service-account-key*.json
 
 # Editor-local files
 .idea/

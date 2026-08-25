@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Linking,
   Pressable,
   RefreshControl,
   SafeAreaView,
@@ -16,7 +17,14 @@ import {
 
 import { SignalCard } from '../components/SignalCard';
 import { API_BASE_URL, readableError } from '../lib/api';
-import { useAgentControl, usePositions, useSetKillSwitch, useSignals } from '../lib/queries';
+import { usePushRegistration } from '../lib/push-notifications';
+import {
+  useAgentControl,
+  usePositions,
+  useRuntimeConfig,
+  useSetKillSwitch,
+  useSignals,
+} from '../lib/queries';
 import { colors } from '../lib/theme';
 
 const categoryCopy: Record<SignalCategory, { label: string; empty: string }> = {
@@ -34,9 +42,12 @@ export default function SignalInboxScreen() {
   const query = useSignals(category);
   const control = useAgentControl();
   const positions = usePositions();
+  const runtime = useRuntimeConfig();
+  const push = usePushRegistration();
   const setKillSwitch = useSetKillSwitch();
   const copy = categoryCopy[category];
   const latestPosition = positions.data?.positions[0];
+  const dataMode = runtime.data?.dataMode ?? 'replay';
 
   const confirmKillSwitch = () => {
     if (!control.data || setKillSwitch.isPending) return;
@@ -61,14 +72,16 @@ export default function SignalInboxScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.eyebrow}>FINANCE AGENT · HISTORICAL REPLAY</Text>
+          <Text style={styles.eyebrow}>
+            FINANCE AGENT · {dataMode === 'live' ? 'LIVE DATA' : 'HISTORICAL REPLAY'}
+          </Text>
           <Text style={styles.title}>Signal inbox</Text>
           <Text style={styles.subtitle}>Evidence first. Execution only after approval.</Text>
         </View>
         <View style={styles.headerActions}>
           <View style={styles.livePill}>
             <View style={styles.liveDot} />
-            <Text style={styles.liveText}>REPLAY</Text>
+            <Text style={styles.liveText}>{dataMode.toUpperCase()}</Text>
           </View>
           {latestPosition ? (
             <Pressable
@@ -79,6 +92,32 @@ export default function SignalInboxScreen() {
             </Pressable>
           ) : null}
         </View>
+      </View>
+
+      <View style={styles.pushCard}>
+        <View style={styles.pushCopy}>
+          <Text style={styles.pushLabel}>APPROVAL ALERTS</Text>
+          <Text style={styles.pushMessage}>{push.state.message}</Text>
+        </View>
+        {push.state.status === 'checking' || push.state.status === 'registering' ? (
+          <ActivityIndicator color={colors.blue} />
+        ) : push.state.status === 'prompt' || push.state.status === 'error' ? (
+          <Pressable accessibilityRole="button" onPress={() => void push.enable()}>
+            <Text style={styles.pushAction}>ENABLE</Text>
+          </Pressable>
+        ) : push.state.status === 'denied' && !push.state.canAskAgain ? (
+          <Pressable accessibilityRole="button" onPress={() => void Linking.openSettings()}>
+            <Text style={styles.pushAction}>SETTINGS</Text>
+          </Pressable>
+        ) : push.state.status === 'denied' ? (
+          <Pressable accessibilityRole="button" onPress={() => void push.enable()}>
+            <Text style={styles.pushAction}>TRY AGAIN</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.pushState}>
+            {push.state.status === 'registered' ? 'ON' : 'UNAVAILABLE'}
+          </Text>
+        )}
       </View>
 
       <Pressable
@@ -233,6 +272,24 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
   },
   positionLinkText: { color: colors.textMuted, fontSize: 9, fontWeight: '900', letterSpacing: 0.7 },
+  pushCard: {
+    alignItems: 'center',
+    backgroundColor: colors.blueDark,
+    borderColor: '#2C5275',
+    borderRadius: 16,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'space-between',
+    marginHorizontal: 20,
+    marginTop: 18,
+    padding: 14,
+  },
+  pushCopy: { flex: 1 },
+  pushLabel: { color: colors.blue, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  pushMessage: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 4 },
+  pushAction: { color: colors.blue, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
+  pushState: { color: colors.mint, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
   controlCard: {
     alignItems: 'center',
     backgroundColor: colors.surface,
@@ -242,7 +299,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginHorizontal: 20,
-    marginTop: 18,
+    marginTop: 10,
     padding: 14,
   },
   controlCardPaused: { backgroundColor: colors.redDark, borderColor: colors.red },
