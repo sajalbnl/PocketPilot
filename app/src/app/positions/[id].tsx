@@ -4,17 +4,23 @@ import {
   Alert,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
+import {
+  AppIcon,
+  AppScreen,
+  FadeInView,
+  ScreenNav,
+  SectionHeading,
+} from '../../components/AppChrome';
 import { readableError } from '../../lib/api';
 import { formatDateTime, formatUsd } from '../../lib/format';
 import { useClosePosition, usePosition } from '../../lib/queries';
-import { colors, radii } from '../../lib/theme';
+import { colors, radii, spacing, typography } from '../../lib/theme';
 
 export default function PositionScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -51,14 +57,8 @@ export default function PositionScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.nav}>
-        <Pressable hitSlop={12} onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>‹</Text>
-        </Pressable>
-        <Text style={styles.navTitle}>{executionLabel.toUpperCase()} POSITION</Text>
-        <View style={styles.navSpacer} />
-      </View>
+    <AppScreen>
+      <ScreenNav onBack={() => router.back()} title={`${executionLabel} position`} />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -67,38 +67,47 @@ export default function PositionScreen() {
             refreshing={query.isRefetching}
             onRefresh={() => void query.refetch()}
             colors={[colors.mint]}
-            progressBackgroundColor={colors.surface}
+            progressBackgroundColor={colors.surfaceRaised}
             tintColor={colors.mint}
           />
         }
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.heroRow}>
-          <View>
-            <Text style={styles.symbol}>{position.symbol} · PERP</Text>
-            <Text style={[styles.side, position.side === 'LONG' ? styles.long : styles.short]}>
-              {position.side} · {position.status}
-            </Text>
+        <FadeInView>
+          <View style={styles.heroRow}>
+            <View>
+              <Text style={styles.symbol}>{position.symbol} · PERP</Text>
+              <Text style={[styles.side, position.side === 'LONG' ? styles.long : styles.short]}>
+                {position.side} · {position.status}
+              </Text>
+            </View>
+            <View style={[styles.statusPill, position.status === 'CLOSED' && styles.closedPill]}>
+              <View style={styles.statusDot} />
+              <Text style={styles.statusText}>{position.executionMode.toUpperCase()}</Text>
+            </View>
           </View>
-          <View style={[styles.statusPill, position.status === 'CLOSED' && styles.closedPill]}>
-            <Text style={styles.statusText}>{position.executionMode.toUpperCase()}</Text>
-          </View>
-        </View>
 
-        <View style={styles.pnlCard}>
-          <Text style={styles.pnlLabel}>
-            {position.status === 'OPEN' ? 'UNREALIZED PNL' : 'REALIZED PNL'} · FEES INCLUDED
-          </Text>
-          <Text style={[styles.pnl, pnl >= 0 ? styles.positive : styles.negative]}>
-            {pnl >= 0 ? '+' : ''}
-            {formatUsd(pnl, 4)}
-          </Text>
-          <Text style={styles.pollingCopy}>
-            {position.status === 'OPEN'
-              ? 'Normalized server mark · refreshes every 10 seconds'
-              : `Closed ${formatDateTime(position.closedAt)}`}
-          </Text>
-        </View>
+          <View style={styles.pnlCard}>
+            <View style={styles.pnlIcon}>
+              <AppIcon color={pnl >= 0 ? colors.mint : colors.red} name="trend" size={20} />
+            </View>
+            <Text style={styles.pnlLabel}>
+              {position.status === 'OPEN' ? 'UNREALIZED PNL' : 'REALIZED PNL'} · FEES INCLUDED
+            </Text>
+            <Text style={[styles.pnl, pnl >= 0 ? styles.positive : styles.negative]}>
+              {pnl >= 0 ? '+' : ''}
+              {formatUsd(pnl, 4)}
+            </Text>
+            <View style={styles.pollingRow}>
+              <View style={styles.pollingDot} />
+              <Text style={styles.pollingCopy}>
+                {position.status === 'OPEN'
+                  ? 'Normalized server mark · refreshes every 10 seconds'
+                  : `Closed ${formatDateTime(position.closedAt)}`}
+              </Text>
+            </View>
+          </View>
+        </FadeInView>
 
         <Section title="Execution">
           <View style={styles.grid}>
@@ -155,7 +164,10 @@ export default function PositionScreen() {
             {close.isPending ? (
               <ActivityIndicator color={colors.red} />
             ) : (
-              <Text style={styles.closeText}>Close Position</Text>
+              <>
+                <Text style={styles.closeText}>Close position</Text>
+                <AppIcon color={colors.red} name="close" size={17} />
+              </>
             )}
           </Pressable>
         ) : (
@@ -165,14 +177,14 @@ export default function PositionScreen() {
           </View>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <SectionHeading title={title} />
       {children}
     </View>
   );
@@ -198,15 +210,13 @@ function Term({ label, value }: { label: string; value: string }) {
 
 function ScreenState({ title, body, retry }: { title: string; body: string; retry?: () => void }) {
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.nav}>
-        <Pressable hitSlop={12} onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>‹</Text>
-        </Pressable>
-      </View>
+    <AppScreen>
+      <ScreenNav onBack={() => router.back()} title="Position" />
       <View style={styles.screenState}>
         {retry ? (
-          <Text style={styles.errorGlyph}>!</Text>
+          <View style={styles.errorGlyph}>
+            <AppIcon color={colors.red} name="error" size={25} />
+          </View>
         ) : (
           <ActivityIndicator color={colors.mint} />
         )}
@@ -218,81 +228,110 @@ function ScreenState({ title, body, retry }: { title: string; body: string; retr
           </Pressable>
         ) : null}
       </View>
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: colors.background, flex: 1 },
-  nav: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    height: 54,
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-  },
-  backButton: {
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    height: 36,
-    justifyContent: 'center',
-    width: 36,
-  },
-  backText: { color: colors.text, fontSize: 29, lineHeight: 31 },
-  navTitle: { color: colors.textDim, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
-  navSpacer: { width: 36 },
-  content: { paddingBottom: 38, paddingHorizontal: 20 },
+  content: { paddingBottom: 44, paddingHorizontal: spacing.lg },
   heroRow: {
     alignItems: 'flex-start',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12,
+    marginTop: spacing.md,
   },
-  symbol: { color: colors.text, fontSize: 25, fontWeight: '900' },
-  side: { fontSize: 11, fontWeight: '900', letterSpacing: 1, marginTop: 6 },
+  symbol: { ...typography.title, color: colors.text },
+  side: { ...typography.label, fontSize: 9, marginTop: spacing.sm },
   long: { color: colors.mint },
   short: { color: colors.red },
-  statusPill: { backgroundColor: colors.mintDark, borderRadius: 14, padding: 9 },
+  statusPill: {
+    alignItems: 'center',
+    backgroundColor: colors.mintDark,
+    borderRadius: radii.pill,
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
   closedPill: { backgroundColor: colors.blueDark },
-  statusText: { color: colors.text, fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
+  statusDot: { backgroundColor: colors.mint, borderRadius: 3, height: 6, width: 6 },
+  statusText: { ...typography.label, color: colors.text, fontSize: 8.5 },
   pnlCard: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radii.large,
     borderWidth: 1,
-    marginTop: 22,
-    padding: 20,
+    marginTop: spacing.xxl,
+    overflow: 'hidden',
+    padding: spacing.xl,
   },
-  pnlLabel: { color: colors.textDim, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
-  pnl: { fontSize: 38, fontWeight: '900', letterSpacing: -1.2, marginTop: 9 },
+  pnlIcon: {
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    backgroundColor: colors.mintDark,
+    borderRadius: radii.medium,
+    height: 40,
+    justifyContent: 'center',
+    marginBottom: -24,
+    width: 40,
+  },
+  pnlLabel: { ...typography.label, color: colors.textDim, fontSize: 9 },
+  pnl: {
+    fontSize: 40,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '700',
+    letterSpacing: -1.4,
+    marginTop: spacing.sm,
+  },
   positive: { color: colors.mint },
   negative: { color: colors.red },
-  pollingCopy: { color: colors.textMuted, fontSize: 11, marginTop: 7 },
-  section: { marginTop: 26 },
-  sectionTitle: { color: colors.text, fontSize: 16, fontWeight: '800', marginBottom: 12 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  pollingRow: { alignItems: 'center', flexDirection: 'row', gap: 7, marginTop: spacing.sm },
+  pollingDot: { backgroundColor: colors.mint, borderRadius: 3, height: 5, width: 5 },
+  pollingCopy: { ...typography.caption, color: colors.textMuted },
+  section: { gap: spacing.md, marginTop: spacing.xxxl },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   metric: {
     backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: radii.medium,
+    borderWidth: 1,
+    flexGrow: 1,
     minWidth: '46%',
-    padding: 14,
+    padding: spacing.lg,
   },
-  metricLabel: { color: colors.textDim, fontSize: 10, fontWeight: '800' },
-  metricValue: { color: colors.text, fontSize: 14, fontWeight: '800', marginTop: 5 },
-  terms: { backgroundColor: colors.surface, borderRadius: radii.medium, paddingHorizontal: 14 },
+  metricLabel: { ...typography.label, color: colors.textDim, fontSize: 9 },
+  metricValue: {
+    color: colors.text,
+    fontSize: 13,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '700',
+    marginTop: 6,
+  },
+  terms: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.medium,
+    borderWidth: 1,
+    paddingHorizontal: spacing.lg,
+  },
   term: {
     alignItems: 'center',
     borderBottomColor: colors.border,
     borderBottomWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 14,
+    minHeight: 55,
   },
-  termLabel: { color: colors.textMuted, fontSize: 12 },
-  termValue: { color: colors.text, fontSize: 13, fontWeight: '800' },
-  thesisCard: { backgroundColor: colors.blueDark, borderRadius: radii.medium, padding: 15 },
-  thesis: { color: colors.text, fontSize: 13, lineHeight: 20 },
+  termLabel: { ...typography.caption, color: colors.textMuted },
+  termValue: { color: colors.text, fontSize: 13, fontVariant: ['tabular-nums'], fontWeight: '700' },
+  thesisCard: {
+    backgroundColor: colors.surface,
+    borderColor: 'rgba(150, 200, 255, 0.20)',
+    borderRadius: radii.medium,
+    borderWidth: 1,
+    padding: spacing.lg,
+  },
+  thesis: { ...typography.body, color: colors.text },
   bulletRow: { flexDirection: 'row', marginTop: 12 },
   bullet: {
     backgroundColor: colors.red,
@@ -302,39 +341,70 @@ const styles = StyleSheet.create({
     marginTop: 6,
     width: 7,
   },
-  bulletText: { color: colors.textMuted, flex: 1, fontSize: 12, lineHeight: 19 },
+  bulletText: { ...typography.caption, color: colors.textMuted, flex: 1 },
   closeButton: {
     alignItems: 'center',
+    backgroundColor: colors.redDark,
     borderColor: colors.red,
-    borderRadius: 15,
+    borderRadius: radii.large,
     borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
     height: 54,
     justifyContent: 'center',
-    marginTop: 28,
+    marginTop: spacing.xxxl,
   },
-  closeText: { color: colors.red, fontSize: 15, fontWeight: '900' },
+  closeText: { color: colors.red, fontSize: 14, fontWeight: '700' },
   closedCard: {
     backgroundColor: colors.mintDark,
+    borderColor: 'rgba(22, 217, 213, 0.18)',
     borderRadius: radii.medium,
-    marginTop: 28,
-    padding: 16,
+    borderWidth: 1,
+    marginTop: spacing.xxxl,
+    padding: spacing.lg,
   },
-  closedTitle: { color: colors.mint, fontSize: 14, fontWeight: '900' },
-  closedBody: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
+  closedTitle: { color: colors.mint, fontSize: 14, fontWeight: '700' },
+  closedBody: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xs },
   errorCard: {
     backgroundColor: colors.redDark,
+    borderColor: 'rgba(255, 101, 104, 0.2)',
     borderRadius: radii.medium,
-    marginTop: 20,
-    padding: 14,
+    borderWidth: 1,
+    marginTop: spacing.xl,
+    padding: spacing.lg,
   },
-  errorTitle: { color: colors.red, fontSize: 13, fontWeight: '900' },
-  errorBody: { color: colors.text, fontSize: 12, marginTop: 4 },
+  errorTitle: { color: colors.red, fontSize: 13, fontWeight: '700' },
+  errorBody: { ...typography.caption, color: colors.text, marginTop: spacing.xs },
   disabled: { opacity: 0.5 },
-  pressed: { opacity: 0.72 },
-  screenState: { alignItems: 'center', flex: 1, justifyContent: 'center', paddingHorizontal: 30 },
-  errorGlyph: { color: colors.red, fontSize: 34, fontWeight: '900' },
-  screenStateTitle: { color: colors.text, fontSize: 19, fontWeight: '900', marginTop: 14 },
-  screenStateBody: { color: colors.textMuted, fontSize: 13, marginTop: 6, textAlign: 'center' },
-  retryButton: { backgroundColor: colors.mint, borderRadius: 12, marginTop: 18, padding: 12 },
-  retryText: { color: colors.background, fontWeight: '900' },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
+  screenState: {
+    alignItems: 'center',
+    flex: 1,
+    justifyContent: 'center',
+    paddingBottom: 70,
+    paddingHorizontal: spacing.xxxl,
+  },
+  errorGlyph: {
+    alignItems: 'center',
+    backgroundColor: colors.redDark,
+    borderRadius: 24,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
+  screenStateTitle: { ...typography.section, color: colors.text, marginTop: spacing.lg },
+  screenStateBody: {
+    ...typography.body,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: colors.mint,
+    borderRadius: radii.medium,
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.md,
+  },
+  retryText: { color: colors.background, fontWeight: '700' },
 });

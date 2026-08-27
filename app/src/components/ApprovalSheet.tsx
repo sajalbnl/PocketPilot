@@ -21,11 +21,13 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { AppIcon } from './AppChrome';
 import { ApiClientError, readableError } from '../lib/api';
 import { formatUsd } from '../lib/format';
 import { useApproveSignal, useRejectSignal, useRuntimeConfig } from '../lib/queries';
-import { colors, radii } from '../lib/theme';
+import { colors, radii, spacing, typography } from '../lib/theme';
 
 interface ApprovalSheetProps {
   visible: boolean;
@@ -35,6 +37,7 @@ interface ApprovalSheetProps {
 }
 
 export function ApprovalSheet({ visible, onClose, signal, mandate }: ApprovalSheetProps) {
+  const insets = useSafeAreaInsets();
   const approve = useApproveSignal(signal.id);
   const reject = useRejectSignal(signal.id);
   const runtime = useRuntimeConfig();
@@ -121,7 +124,7 @@ export function ApprovalSheet({ visible, onClose, signal, mandate }: ApprovalShe
           onPress={() => !busy && onClose()}
           style={styles.backdrop}
         />
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]}>
           <View style={styles.handle} />
           <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             <View style={styles.headingRow}>
@@ -131,17 +134,28 @@ export function ApprovalSheet({ visible, onClose, signal, mandate }: ApprovalShe
                   {signal.symbol} {signal.side}
                 </Text>
               </View>
-              <Pressable disabled={busy} hitSlop={12} onPress={onClose}>
-                <Text style={styles.close}>×</Text>
+              <Pressable
+                accessibilityLabel="Close approval"
+                disabled={busy}
+                hitSlop={12}
+                onPress={onClose}
+                style={styles.closeButton}
+              >
+                <AppIcon color={colors.textMuted} name="close" size={18} />
               </Pressable>
             </View>
 
             <View style={styles.mandateCard}>
-              <Text style={styles.mandateTitle}>MANDATE BOUNDARY</Text>
-              <Text style={styles.mandateText}>
-                {formatUsd(mandate.riskLimits.maxPositionUsd)} max ·{' '}
-                {mandate.riskLimits.maxLeverage}x max · Stop required · Approval required
-              </Text>
+              <View style={styles.mandateIcon}>
+                <AppIcon color={colors.blue} name="shield" size={18} />
+              </View>
+              <View style={styles.mandateCopy}>
+                <Text style={styles.mandateTitle}>MANDATE BOUNDARY</Text>
+                <Text style={styles.mandateText}>
+                  {formatUsd(mandate.riskLimits.maxPositionUsd)} max ·{' '}
+                  {mandate.riskLimits.maxLeverage}x max · Stop required
+                </Text>
+              </View>
             </View>
 
             <Field
@@ -218,7 +232,10 @@ export function ApprovalSheet({ visible, onClose, signal, mandate }: ApprovalShe
               {approve.isPending ? (
                 <ActivityIndicator color={colors.background} />
               ) : (
-                <Text style={styles.approveText}>Approve & execute {executionLabel} order</Text>
+                <>
+                  <Text style={styles.approveText}>Approve & execute</Text>
+                  <AppIcon color={colors.background} name="forward" size={18} />
+                </>
               )}
             </Pressable>
             <Pressable
@@ -289,93 +306,136 @@ function Field({
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.68)' },
+  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: colors.scrim },
   sheet: {
     backgroundColor: colors.surface,
-    borderColor: colors.borderStrong,
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
+    borderColor: colors.border,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     borderWidth: 1,
-    maxHeight: '91%',
-    paddingBottom: Platform.OS === 'android' ? 18 : 34,
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    maxHeight: '93%',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
   },
   handle: {
     alignSelf: 'center',
     backgroundColor: colors.borderStrong,
     borderRadius: 3,
     height: 4,
-    marginBottom: 17,
-    width: 42,
+    marginBottom: spacing.xl,
+    width: 36,
   },
   headingRow: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
-  eyebrow: { color: colors.mint, fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-  title: { color: colors.text, fontSize: 25, fontWeight: '800', marginTop: 4 },
-  close: { color: colors.textMuted, fontSize: 32, lineHeight: 32 },
-  mandateCard: {
-    backgroundColor: colors.blueDark,
-    borderRadius: radii.medium,
-    marginTop: 18,
-    padding: 14,
+  eyebrow: { ...typography.label, color: colors.mint, fontSize: 9 },
+  title: { ...typography.title, color: colors.text, marginTop: spacing.xs },
+  closeButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.border,
+    borderRadius: radii.small,
+    borderWidth: 1,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
   },
-  mandateTitle: { color: colors.blue, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
-  mandateText: { color: colors.text, fontSize: 13, lineHeight: 20, marginTop: 5 },
-  field: { marginTop: 17 },
-  label: { color: colors.textMuted, fontSize: 12, fontWeight: '700', marginBottom: 8 },
+  mandateCard: {
+    alignItems: 'center',
+    backgroundColor: colors.blueDark,
+    borderColor: 'rgba(150, 200, 255, 0.18)',
+    borderRadius: radii.medium,
+    borderWidth: 1,
+    flexDirection: 'row',
+    marginTop: spacing.xl,
+    padding: spacing.md,
+  },
+  mandateIcon: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(150, 200, 255, 0.10)',
+    borderRadius: radii.small,
+    height: 38,
+    justifyContent: 'center',
+    width: 38,
+  },
+  mandateCopy: { flex: 1, marginLeft: spacing.md },
+  mandateTitle: { ...typography.label, color: colors.blue, fontSize: 9 },
+  mandateText: { ...typography.caption, color: colors.text, marginTop: 3 },
+  field: { marginTop: spacing.lg },
+  label: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontWeight: '600',
+    marginBottom: spacing.sm,
+  },
   inputFrame: {
     alignItems: 'center',
-    backgroundColor: colors.background,
+    backgroundColor: colors.surfaceRaised,
     borderColor: colors.border,
     borderRadius: radii.medium,
     borderWidth: 1,
     flexDirection: 'row',
-    height: 54,
-    paddingHorizontal: 15,
+    height: 56,
+    paddingHorizontal: spacing.lg,
   },
   inputError: { borderColor: colors.red },
-  input: { color: colors.text, flex: 1, fontSize: 18, fontWeight: '700', paddingVertical: 0 },
-  affix: { color: colors.textMuted, fontSize: 17, fontWeight: '700', marginHorizontal: 3 },
-  fieldError: { color: colors.red, fontSize: 11, marginTop: 6 },
-  safetyCopy: { color: colors.textDim, fontSize: 11, lineHeight: 17, marginTop: 16 },
+  input: {
+    color: colors.text,
+    flex: 1,
+    fontSize: 18,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '600',
+    paddingVertical: 0,
+  },
+  affix: { color: colors.textMuted, fontSize: 16, fontWeight: '600', marginHorizontal: 3 },
+  fieldError: { ...typography.caption, color: colors.red, marginTop: 6 },
+  safetyCopy: {
+    ...typography.caption,
+    color: colors.textDim,
+    lineHeight: 17,
+    marginTop: spacing.lg,
+  },
   testnetWarning: {
     backgroundColor: colors.amberDark,
-    borderColor: colors.amber,
+    borderColor: 'rgba(244, 201, 93, 0.24)',
     borderRadius: radii.small,
     borderWidth: 1,
-    marginTop: 13,
-    padding: 12,
+    marginTop: spacing.md,
+    padding: spacing.md,
   },
-  testnetWarningTitle: { color: colors.amber, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
-  testnetWarningBody: { color: colors.text, fontSize: 11, lineHeight: 17, marginTop: 4 },
+  testnetWarningTitle: { ...typography.label, color: colors.amber, fontSize: 9 },
+  testnetWarningBody: { ...typography.caption, color: colors.text, marginTop: spacing.xs },
   serverError: {
     backgroundColor: colors.redDark,
+    borderColor: 'rgba(255, 101, 104, 0.20)',
     borderRadius: radii.small,
-    marginTop: 13,
-    padding: 12,
+    borderWidth: 1,
+    marginTop: spacing.md,
+    padding: spacing.md,
   },
-  serverErrorTitle: { color: colors.red, fontSize: 12, fontWeight: '800' },
-  serverErrorBody: { color: colors.text, fontSize: 12, lineHeight: 18, marginTop: 3 },
-  serverRiskRule: { color: colors.red, fontSize: 11, lineHeight: 17, marginTop: 5 },
+  serverErrorTitle: { color: colors.red, fontSize: 12, fontWeight: '700' },
+  serverErrorBody: { ...typography.caption, color: colors.text, marginTop: 3 },
+  serverRiskRule: { ...typography.caption, color: colors.red, marginTop: spacing.xs },
   approveButton: {
     alignItems: 'center',
     backgroundColor: colors.mint,
-    borderRadius: 15,
-    height: 54,
+    borderRadius: radii.medium,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    height: 56,
     justifyContent: 'center',
-    marginTop: 18,
+    marginTop: spacing.xl,
   },
-  approveText: { color: colors.background, fontSize: 15, fontWeight: '900' },
+  approveText: { color: colors.background, fontSize: 15, fontWeight: '700' },
   rejectButton: {
     alignItems: 'center',
-    borderColor: colors.redDark,
-    borderRadius: 15,
+    backgroundColor: colors.redDark,
+    borderColor: 'rgba(255, 101, 104, 0.22)',
+    borderRadius: radii.medium,
     borderWidth: 1,
-    height: 50,
+    height: 52,
     justifyContent: 'center',
-    marginTop: 10,
+    marginTop: spacing.sm,
   },
-  rejectText: { color: colors.red, fontSize: 14, fontWeight: '800' },
+  rejectText: { color: colors.red, fontSize: 14, fontWeight: '700' },
   disabled: { opacity: 0.5 },
-  pressed: { opacity: 0.72 },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
 });

@@ -4,9 +4,10 @@
     "slug": "pocketpilot",
     "version": "1.0.0",
     "orientation": "portrait",
+    "backgroundColor": "#131313",
     "icon": "./assets/images/icon.png",
     "scheme": "pocketpilot",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "ios": {
       "icon": "./assets/expo.icon"
     },
@@ -14,12 +15,21 @@
       "package": "com.sajalbansal.pocketpilot",
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#131313",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
+    },
+    "androidStatusBar": {
+      "backgroundColor": "#131313",
+      "barStyle": "light-content",
+      "translucent": true
+    },
+    "androidNavigationBar": {
+      "backgroundColor": "#131313",
+      "barStyle": "light-content"
     },
     "web": {
       "output": "static",
@@ -31,14 +41,14 @@
         "expo-notifications",
         {
           "icon": "./assets/images/android-icon-monochrome.png",
-          "color": "#58E0B1",
+          "color": "#16D9D5",
           "defaultChannel": "approvals"
         }
       ],
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#131313",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }

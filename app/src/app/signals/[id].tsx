@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,11 +12,18 @@ import {
 } from 'react-native';
 
 import { ApprovalSheet } from '../../components/ApprovalSheet';
+import {
+  AppIcon,
+  AppScreen,
+  FadeInView,
+  ScreenNav,
+  SectionHeading,
+} from '../../components/AppChrome';
 import { StateChip } from '../../components/SignalCard';
 import { ApiClientError, readableError } from '../../lib/api';
 import { formatDateTime, formatPercent, formatUsd } from '../../lib/format';
 import { useMandate, useRuntimeConfig, useSignal } from '../../lib/queries';
-import { colors, radii } from '../../lib/theme';
+import { colors, radii, spacing, typography } from '../../lib/theme';
 
 export default function SignalDetailScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -57,14 +63,8 @@ export default function SignalDetailScreen() {
   const approvable = signal.state === 'PENDING_APPROVAL' && !expiredByTime;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.nav}>
-        <Pressable hitSlop={12} onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>‹</Text>
-        </Pressable>
-        <Text style={styles.navTitle}>SIGNAL TRACE</Text>
-        <View style={styles.navSpacer} />
-      </View>
+    <AppScreen>
+      <ScreenNav onBack={() => router.back()} title="Signal trace" />
 
       <ScrollView
         contentContainerStyle={styles.content}
@@ -73,37 +73,41 @@ export default function SignalDetailScreen() {
             refreshing={signalQuery.isRefetching}
             onRefresh={() => void signalQuery.refetch()}
             colors={[colors.mint]}
-            progressBackgroundColor={colors.surface}
+            progressBackgroundColor={colors.surfaceRaised}
             tintColor={colors.mint}
           />
         }
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.heroTop}>
-          <View>
-            <Text style={styles.symbol}>{signal.symbol} · PERP</Text>
-            <Text style={[styles.direction, signal.side === 'SHORT' ? styles.short : styles.long]}>
-              {signal.side ?? 'WATCH'} PROPOSAL
-            </Text>
+        <FadeInView>
+          <View style={styles.heroTop}>
+            <View>
+              <Text style={styles.symbol}>{signal.symbol} · PERP</Text>
+              <Text
+                style={[styles.direction, signal.side === 'SHORT' ? styles.short : styles.long]}
+              >
+                {signal.side ?? 'WATCH'} PROPOSAL
+              </Text>
+            </View>
+            <StateChip state={signal.state} />
           </View>
-          <StateChip state={signal.state} />
-        </View>
-        <Text style={styles.modeLine}>
-          {signal.dataMode.toUpperCase()} DATA ·{' '}
-          {runtimeQuery.data?.executionMode.toUpperCase() ?? 'EXECUTION MODE UNAVAILABLE'}
-        </Text>
-        <Text style={styles.heroTitle}>{signal.title ?? 'Signal analysis'}</Text>
-        <View style={styles.heroMetrics}>
-          <HeroMetric
-            label="Confidence"
-            value={signal.confidence === null ? '—' : formatPercent(signal.confidence)}
-          />
-          <HeroMetric label="Notional" value={formatUsd(signal.proposedNotionalUsd)} />
-          <HeroMetric
-            label="Leverage"
-            value={signal.proposedLeverage ? `${signal.proposedLeverage}x` : '—'}
-          />
-        </View>
+          <Text style={styles.modeLine}>
+            {signal.dataMode.toUpperCase()} DATA ·{' '}
+            {runtimeQuery.data?.executionMode.toUpperCase() ?? 'EXECUTION MODE UNAVAILABLE'}
+          </Text>
+          <Text style={styles.heroTitle}>{signal.title ?? 'Signal analysis'}</Text>
+          <View style={styles.heroMetrics}>
+            <HeroMetric
+              label="Confidence"
+              value={signal.confidence === null ? '—' : formatPercent(signal.confidence)}
+            />
+            <HeroMetric label="Notional" value={formatUsd(signal.proposedNotionalUsd)} />
+            <HeroMetric
+              label="Leverage"
+              value={signal.proposedLeverage ? `${signal.proposedLeverage}x` : '—'}
+            />
+          </View>
+        </FadeInView>
 
         <View style={[styles.boundaryCard, styles.reasoningCard]}>
           <Text style={[styles.boundaryLabel, styles.reasoningLabel]}>
@@ -299,8 +303,11 @@ export default function SignalDetailScreen() {
             onPress={() => setSheetOpen(true)}
             style={({ pressed }) => [styles.reviewButton, pressed && styles.pressed]}
           >
-            <Text style={styles.reviewEyebrow}>ACTION REQUIRED</Text>
-            <Text style={styles.reviewText}>Review approval parameters →</Text>
+            <View>
+              <Text style={styles.reviewEyebrow}>ACTION REQUIRED</Text>
+              <Text style={styles.reviewText}>Review approval parameters</Text>
+            </View>
+            <AppIcon color={colors.background} name="forward" size={19} />
           </Pressable>
         ) : (
           <View style={styles.inactiveCard}>
@@ -318,7 +325,7 @@ export default function SignalDetailScreen() {
           visible={sheetOpen}
         />
       ) : null}
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
@@ -336,17 +343,15 @@ function inactiveReason(signal: SignalDetail, expiredByTime: boolean): string {
 
 function ScreenState({ title, body, retry }: { title: string; body: string; retry?: () => void }) {
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.nav}>
-        <Pressable hitSlop={12} onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>‹</Text>
-        </Pressable>
-      </View>
+    <AppScreen>
+      <ScreenNav onBack={() => router.back()} title="Signal trace" />
       <View style={styles.screenState}>
         {!retry ? (
           <ActivityIndicator color={colors.mint} size="large" />
         ) : (
-          <Text style={styles.errorGlyph}>!</Text>
+          <View style={styles.errorGlyph}>
+            <AppIcon color={colors.red} name="error" size={25} />
+          </View>
         )}
         <Text style={styles.screenStateTitle}>{title}</Text>
         <Text style={styles.screenStateBody}>{body}</Text>
@@ -356,7 +361,7 @@ function ScreenState({ title, body, retry }: { title: string; body: string; retr
           </Pressable>
         ) : null}
       </View>
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
@@ -371,8 +376,7 @@ function Section({
 }) {
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
+      <SectionHeading {...(subtitle ? { subtitle } : {})} title={title} />
       <View style={styles.sectionBody}>{children}</View>
     </View>
   );
@@ -437,197 +441,222 @@ function Term({
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: colors.background, flex: 1 },
-  nav: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    height: 54,
-    justifyContent: 'space-between',
-    paddingHorizontal: 18,
-  },
-  backButton: {
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    height: 36,
-    justifyContent: 'center',
-    width: 36,
-  },
-  backText: { color: colors.text, fontSize: 29, lineHeight: 31, marginTop: -2 },
-  navTitle: { color: colors.textDim, fontSize: 10, fontWeight: '900', letterSpacing: 1.2 },
-  navSpacer: { width: 36 },
-  content: { paddingBottom: 38, paddingHorizontal: 20 },
+  content: { paddingBottom: 44, paddingHorizontal: spacing.lg },
   heroTop: {
     alignItems: 'flex-start',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 12,
+    marginTop: spacing.md,
   },
-  symbol: { color: colors.text, fontSize: 17, fontWeight: '900' },
-  direction: { fontSize: 11, fontWeight: '900', letterSpacing: 1, marginTop: 5 },
+  symbol: { color: colors.text, fontSize: 16, fontWeight: '700', letterSpacing: -0.15 },
+  direction: { ...typography.label, fontSize: 9, marginTop: 5 },
   long: { color: colors.mint },
   short: { color: colors.red },
   modeLine: {
     color: colors.textDim,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    marginTop: 14,
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.65,
+    marginTop: spacing.lg,
   },
   heroTitle: {
+    ...typography.display,
     color: colors.text,
-    fontSize: 29,
-    fontWeight: '800',
-    letterSpacing: -0.7,
-    lineHeight: 35,
-    marginTop: 20,
+    fontSize: 32,
+    lineHeight: 37,
+    marginTop: spacing.xl,
   },
   heroMetrics: {
-    borderBottomColor: colors.border,
-    borderBottomWidth: 1,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.large,
+    borderWidth: 1,
     flexDirection: 'row',
-    gap: 34,
-    paddingBottom: 22,
-    paddingTop: 20,
+    justifyContent: 'space-between',
+    marginTop: spacing.xl,
+    padding: spacing.lg,
   },
   heroMetric: { gap: 5 },
   heroMetricLabel: {
+    ...typography.label,
     color: colors.textDim,
-    fontSize: 10,
-    fontWeight: '800',
+    fontSize: 9,
     textTransform: 'uppercase',
   },
-  heroMetricValue: { color: colors.text, fontSize: 16, fontWeight: '800' },
-  boundaryCard: { borderRadius: radii.large, borderWidth: 1, marginTop: 24, padding: 18 },
-  reasoningCard: { backgroundColor: colors.amberDark, borderColor: '#665126' },
-  errorBoundaryCard: { backgroundColor: colors.redDark, borderColor: '#693638' },
+  heroMetricValue: {
+    color: colors.text,
+    fontSize: 16,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '700',
+  },
+  boundaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.large,
+    borderWidth: 1,
+    marginTop: spacing.xxl,
+    padding: spacing.lg,
+  },
+  reasoningCard: { borderColor: 'rgba(244, 201, 93, 0.24)' },
+  errorBoundaryCard: { backgroundColor: colors.redDark, borderColor: 'rgba(255, 101, 104, 0.24)' },
   errorBoundaryLabel: { color: colors.red, marginBottom: 8 },
-  riskCard: { backgroundColor: colors.blueDark, borderColor: '#2C5275' },
-  boundaryLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 0.9 },
+  riskCard: { borderColor: 'rgba(150, 200, 255, 0.22)' },
+  boundaryLabel: { ...typography.label, fontSize: 9 },
   reasoningLabel: { color: colors.amber },
   riskLabel: { color: colors.blue },
   boundaryTitle: {
     color: colors.text,
-    fontSize: 17,
-    fontWeight: '800',
-    marginBottom: 8,
-    marginTop: 7,
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: spacing.sm,
+    marginTop: spacing.sm,
   },
-  body: { color: colors.textMuted, fontSize: 14, lineHeight: 22 },
+  body: { ...typography.body, color: colors.textMuted },
   previewNotice: {
-    borderTopColor: '#2C5275',
+    borderTopColor: colors.border,
     borderTopWidth: 1,
     color: colors.blue,
     fontSize: 10,
-    fontWeight: '700',
-    lineHeight: 16,
-    marginTop: 13,
-    paddingTop: 11,
+    fontWeight: '600',
+    lineHeight: 15,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
   },
-  riskRuleRow: { alignItems: 'flex-start', flexDirection: 'row', gap: 10, marginTop: 10 },
-  riskRuleStatus: { color: colors.mint, fontSize: 10, fontWeight: '900', width: 32 },
+  riskRuleRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  riskRuleStatus: { color: colors.mint, fontSize: 9, fontWeight: '700', width: 34 },
   riskRuleFailed: { color: colors.red },
   riskRuleCopy: { flex: 1 },
-  riskRuleId: { color: colors.text, fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
-  riskRuleExplanation: { color: colors.textMuted, fontSize: 12, lineHeight: 18, marginTop: 2 },
-  section: { marginTop: 29 },
-  sectionTitle: { color: colors.text, fontSize: 19, fontWeight: '800', letterSpacing: -0.2 },
-  sectionSubtitle: { color: colors.textDim, fontSize: 11, marginTop: 4 },
-  sectionBody: { gap: 10, marginTop: 14 },
-  bulletRow: { alignItems: 'flex-start', flexDirection: 'row', gap: 11 },
+  riskRuleId: { ...typography.label, color: colors.text, fontSize: 10, textTransform: 'uppercase' },
+  riskRuleExplanation: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  section: { marginTop: spacing.xxxl },
+  sectionBody: { gap: spacing.md, marginTop: spacing.lg },
+  bulletRow: { alignItems: 'flex-start', flexDirection: 'row', gap: spacing.md },
   bullet: { borderRadius: 3, height: 6, marginTop: 7, width: 6 },
-  bulletText: { color: colors.textMuted, flex: 1, fontSize: 14, lineHeight: 21 },
+  bulletText: { ...typography.body, color: colors.textMuted, flex: 1 },
   evidenceCard: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radii.medium,
     borderWidth: 1,
-    padding: 16,
+    padding: spacing.lg,
   },
   sourceHeader: { alignItems: 'center', flexDirection: 'row', gap: 7 },
   sourceDot: { borderRadius: 4, height: 7, width: 7 },
-  sourceLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  sourceLabel: { ...typography.label, fontSize: 9 },
   evidenceTitle: {
     color: colors.text,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
     lineHeight: 20,
-    marginTop: 10,
+    marginTop: spacing.md,
   },
-  statGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 13, rowGap: 14 },
+  statGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.lg, rowGap: spacing.lg },
   stat: { minWidth: '50%' },
-  statLabel: { color: colors.textDim, fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  statValue: { color: colors.text, fontSize: 13, fontWeight: '800', marginTop: 4 },
-  termsCard: { backgroundColor: colors.surface, borderRadius: radii.medium, paddingHorizontal: 16 },
+  statLabel: {
+    ...typography.label,
+    color: colors.textDim,
+    fontSize: 9,
+    textTransform: 'uppercase',
+  },
+  statValue: {
+    color: colors.text,
+    fontSize: 13,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '700',
+    marginTop: 4,
+  },
+  termsCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.medium,
+    borderWidth: 1,
+    paddingHorizontal: spacing.lg,
+  },
   term: {
     alignItems: 'center',
     borderBottomColor: colors.border,
     borderBottomWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    minHeight: 54,
+    minHeight: 56,
   },
-  termLabel: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
-  termValue: { color: colors.text, fontSize: 14, fontWeight: '800' },
+  termLabel: { ...typography.caption, color: colors.textMuted, fontWeight: '600' },
+  termValue: { color: colors.text, fontSize: 14, fontVariant: ['tabular-nums'], fontWeight: '700' },
   danger: { color: colors.red },
   mandateGrid: {
     backgroundColor: colors.surface,
+    borderColor: colors.border,
     borderRadius: radii.medium,
+    borderWidth: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: 16,
-    rowGap: 18,
+    padding: spacing.lg,
+    rowGap: spacing.xl,
   },
-  errorText: { color: colors.red, fontSize: 13 },
-  timelineRow: { flexDirection: 'row', minHeight: 74 },
+  errorText: { ...typography.body, color: colors.red },
+  timelineRow: { flexDirection: 'row', minHeight: 76 },
   timelineRail: { alignItems: 'center', width: 22 },
   timelineDot: { backgroundColor: colors.mint, borderRadius: 5, height: 9, marginTop: 4, width: 9 },
-  timelineLine: { backgroundColor: colors.borderStrong, flex: 1, marginVertical: 4, width: 1 },
-  timelineContent: { flex: 1, paddingBottom: 20, paddingLeft: 8 },
-  timelineState: { color: colors.text, fontSize: 12, fontWeight: '900' },
-  timelineReason: { color: colors.textMuted, fontSize: 12, lineHeight: 17, marginTop: 3 },
-  timelineDate: { color: colors.textDim, fontSize: 10, marginTop: 4 },
+  timelineLine: { backgroundColor: colors.borderStrong, flex: 1, marginVertical: 4, width: 1.5 },
+  timelineContent: { flex: 1, paddingBottom: spacing.xl, paddingLeft: spacing.sm },
+  timelineState: { ...typography.label, color: colors.text, fontSize: 10 },
+  timelineReason: { ...typography.caption, color: colors.textMuted, marginTop: 3 },
+  timelineDate: { color: colors.textDim, fontSize: 10, marginTop: 5 },
   reviewButton: {
+    alignItems: 'center',
     backgroundColor: colors.mint,
     borderRadius: radii.large,
-    marginTop: 30,
-    padding: 18,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: spacing.xxxl,
+    minHeight: 64,
+    paddingHorizontal: spacing.lg,
   },
-  reviewEyebrow: { color: '#214637', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
-  reviewText: { color: colors.background, fontSize: 16, fontWeight: '900', marginTop: 5 },
+  reviewEyebrow: { ...typography.label, color: '#17494A', fontSize: 9 },
+  reviewText: { color: colors.background, fontSize: 15, fontWeight: '700', marginTop: 3 },
   inactiveCard: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: radii.large,
     borderWidth: 1,
-    marginTop: 30,
-    padding: 18,
+    marginTop: spacing.xxxl,
+    padding: spacing.lg,
   },
-  inactiveTitle: { color: colors.text, fontSize: 14, fontWeight: '800' },
-  inactiveBody: { color: colors.textMuted, fontSize: 12, lineHeight: 18, marginTop: 5 },
-  pressed: { opacity: 0.72 },
+  inactiveTitle: { color: colors.text, fontSize: 14, fontWeight: '700' },
+  inactiveBody: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xs },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.985 }] },
   screenState: {
     alignItems: 'center',
     flex: 1,
     justifyContent: 'center',
     paddingBottom: 70,
-    paddingHorizontal: 32,
+    paddingHorizontal: spacing.xxxl,
   },
-  screenStateTitle: { color: colors.text, fontSize: 19, fontWeight: '800', marginTop: 16 },
+  screenStateTitle: { ...typography.section, color: colors.text, marginTop: spacing.lg },
   screenStateBody: {
+    ...typography.body,
     color: colors.textMuted,
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 7,
+    marginTop: spacing.sm,
     textAlign: 'center',
   },
-  errorGlyph: { color: colors.red, fontSize: 36, fontWeight: '900' },
+  errorGlyph: {
+    alignItems: 'center',
+    backgroundColor: colors.redDark,
+    borderRadius: 24,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
   retryButton: {
     backgroundColor: colors.mint,
-    borderRadius: 12,
-    marginTop: 18,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    borderRadius: radii.medium,
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.md,
   },
-  retryText: { color: colors.background, fontSize: 14, fontWeight: '800' },
+  retryText: { color: colors.background, fontSize: 14, fontWeight: '700' },
 });

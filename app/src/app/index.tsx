@@ -8,13 +8,19 @@ import {
   Linking,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
+import {
+  AppIcon,
+  AppScreen,
+  BrandLockup,
+  FadeInView,
+  SectionHeading,
+} from '../components/AppChrome';
 import { SignalCard } from '../components/SignalCard';
 import { API_BASE_URL, readableError } from '../lib/api';
 import { usePushRegistration } from '../lib/push-notifications';
@@ -25,16 +31,16 @@ import {
   useSetKillSwitch,
   useSignals,
 } from '../lib/queries';
-import { colors } from '../lib/theme';
+import { colors, radii, shadows, spacing, typography } from '../lib/theme';
 
 const categoryCopy: Record<SignalCategory, { label: string; empty: string }> = {
   'approval-required': {
-    label: 'Approval Required',
-    empty: 'No decisions waiting. New proposals will appear here.',
+    label: 'For review',
+    empty: 'No decisions are waiting. New proposals will appear here.',
   },
   monitoring: { label: 'Monitoring', empty: 'No market candidates are being monitored.' },
   executed: { label: 'Executed', empty: 'No completed executions to show yet.' },
-  expired: { label: 'Expired', empty: 'No expired or inactive signals.' },
+  expired: { label: 'Inactive', empty: 'No expired or inactive signals.' },
 };
 
 export default function SignalInboxScreen() {
@@ -48,9 +54,8 @@ export default function SignalInboxScreen() {
   const copy = categoryCopy[category];
   const latestPosition = positions.data?.positions[0];
   const dataMode = runtime.data?.dataMode ?? 'replay';
-  const modeLabel = runtime.isError
-    ? 'MODE UNKNOWN'
-    : `${dataMode.toUpperCase()} · ${(runtime.data?.executionMode ?? 'paper').toUpperCase()}`;
+  const executionMode = runtime.data?.executionMode ?? 'paper';
+  const signals = query.data?.signals ?? [];
 
   const confirmKillSwitch = () => {
     if (!control.data || setKillSwitch.isPending) return;
@@ -84,322 +89,379 @@ export default function SignalInboxScreen() {
     );
   };
 
+  const pushAction = () => {
+    if (push.state.status === 'denied' && !push.state.canAskAgain) {
+      void Linking.openSettings();
+      return;
+    }
+    void push.enable();
+  };
+
+  const pushActionLabel =
+    push.state.status === 'denied' && !push.state.canAskAgain
+      ? 'Settings'
+      : push.state.status === 'denied'
+        ? 'Try again'
+        : 'Enable';
+  const pushCanAct = ['prompt', 'error', 'denied'].includes(push.state.status);
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.eyebrow}>
-            FINANCE AGENT · {dataMode === 'live' ? 'LIVE DATA' : 'HISTORICAL REPLAY'}
-          </Text>
-          <Text style={styles.title}>Signal inbox</Text>
-          <Text style={styles.subtitle}>Evidence first. Execution only after approval.</Text>
-        </View>
-        <View style={styles.headerActions}>
-          <View style={styles.livePill}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>{modeLabel}</Text>
-          </View>
-          {latestPosition ? (
-            <Pressable
-              onPress={() => router.push(`/positions/${latestPosition.id}` as never)}
-              style={styles.positionLink}
-            >
-              <Text style={styles.positionLinkText}>POSITION</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
-
-      <View style={styles.pushCard}>
-        <View style={styles.pushCopy}>
-          <Text style={styles.pushLabel}>APPROVAL ALERTS</Text>
-          <Text style={styles.pushMessage}>{push.state.message}</Text>
-        </View>
-        {push.state.status === 'checking' || push.state.status === 'registering' ? (
-          <ActivityIndicator color={colors.blue} />
-        ) : push.state.status === 'prompt' || push.state.status === 'error' ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void push.enable()}
-            style={styles.compactAction}
-          >
-            <Text style={styles.pushAction}>ENABLE</Text>
-          </Pressable>
-        ) : push.state.status === 'denied' && !push.state.canAskAgain ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void Linking.openSettings()}
-            style={styles.compactAction}
-          >
-            <Text style={styles.pushAction}>SETTINGS</Text>
-          </Pressable>
-        ) : push.state.status === 'denied' ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => void push.enable()}
-            style={styles.compactAction}
-          >
-            <Text style={styles.pushAction}>TRY AGAIN</Text>
-          </Pressable>
-        ) : (
-          <Text style={styles.pushState}>
-            {push.state.status === 'registered' ? 'ON' : 'UNAVAILABLE'}
-          </Text>
+    <AppScreen>
+      <FlatList
+        data={signals}
+        key={`${category}-${query.isPending ? 'pending' : 'ready'}`}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item, index }) => (
+          <SignalCard
+            index={index}
+            signal={item}
+            onPress={() => router.push(`/signals/${item.id}` as never)}
+          />
         )}
-      </View>
-
-      <Pressable
-        accessibilityRole="button"
-        disabled={!control.data || setKillSwitch.isPending}
-        onPress={confirmKillSwitch}
-        style={[styles.controlCard, control.data?.killSwitchEnabled && styles.controlCardPaused]}
-      >
-        <View>
-          <Text style={styles.controlLabel}>AGENT CONTROL</Text>
-          <Text style={styles.controlTitle}>
-            {control.data?.killSwitchEnabled ? 'Kill switch active' : 'Execution enabled'}
-          </Text>
-          <Text style={styles.controlBody}>
-            {control.data?.killSwitchEnabled
-              ? 'New approvals blocked · positions stay open'
-              : 'Tap to pause new approvals and execution'}
-          </Text>
-        </View>
-        {setKillSwitch.isPending ? (
-          <ActivityIndicator color={colors.text} />
-        ) : (
-          <Text
-            style={[
-              styles.controlAction,
-              control.data?.killSwitchEnabled && styles.controlActionPaused,
-            ]}
-          >
-            {control.data?.killSwitchEnabled ? 'RESUME' : 'PAUSE'}
-          </Text>
-        )}
-      </Pressable>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabs}
-      >
-        {signalCategories.map((item) => {
-          const active = item === category;
-          return (
-            <Pressable
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              key={item}
-              onPress={() => setCategory(item)}
-              style={[styles.tab, active && styles.tabActive]}
-            >
-              <Text style={[styles.tabText, active && styles.tabTextActive]}>
-                {categoryCopy[item].label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {query.isPending ? (
-        <CenteredState>
-          <ActivityIndicator color={colors.mint} size="large" />
-          <Text style={styles.stateTitle}>Loading {copy.label.toLowerCase()}</Text>
-          <Text style={styles.stateBody}>Checking the authoritative server state…</Text>
-        </CenteredState>
-      ) : query.isError ? (
-        <CenteredState>
-          <Text style={styles.errorGlyph}>!</Text>
-          <Text style={styles.stateTitle}>Couldn’t load signals</Text>
-          <Text style={styles.stateBody}>{readableError(query.error)}</Text>
-          <Pressable style={styles.retryButton} onPress={() => void query.refetch()}>
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
-          <Text numberOfLines={1} style={styles.endpoint}>
-            API · {API_BASE_URL}
-          </Text>
-        </CenteredState>
-      ) : (
-        <FlatList
-          data={query.data.signals}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <SignalCard signal={item} onPress={() => router.push(`/signals/${item.id}` as never)} />
-          )}
-          contentContainerStyle={[styles.list, query.data.signals.length === 0 && styles.listEmpty]}
-          ListHeaderComponent={
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionLabel}>{copy.label}</Text>
-              <Text style={styles.sectionCount}>{query.data.total} SIGNALS</Text>
+        contentContainerStyle={[styles.list, signals.length === 0 && styles.listEmpty]}
+        ListHeaderComponent={
+          <>
+            <View style={styles.topBar}>
+              <BrandLockup />
+              {latestPosition ? (
+                <Pressable 
+                  accessibilityLabel="Open latest position"
+                  accessibilityRole="button"
+                  onPress={() => router.push(`/positions/${latestPosition.id}` as never)}
+                  style={({ pressed }) => [styles.positionButton, pressed && styles.pressed]}
+                >
+                  <AppIcon color={colors.mint} name="wallet" size={16} />
+                  <Text style={styles.positionButtonText}>Position</Text>
+                </Pressable>
+              ) : (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>PP</Text>
+                </View>
+              )}
             </View>
-          }
-          ListEmptyComponent={
-            <CenteredState compact>
-              <Text style={styles.emptyGlyph}>◎</Text>
-              <Text style={styles.stateTitle}>All clear</Text>
+
+            <FadeInView style={styles.hero}>
+              <View style={styles.modePill}>
+                <Text style={styles.modeText}>
+                  {dataMode === 'live' ? 'LIVE DATA' : 'HISTORICAL REPLAY'} ·{' '}
+                  {executionMode.toUpperCase()}
+                </Text>
+              </View>
+              <Text style={styles.title}>Signals, ready for review.</Text>
+              <Text style={styles.subtitle}>
+                Evidence-led decisions with execution kept inside your mandate.
+              </Text>
+            </FadeInView>
+
+            <FadeInView delay={70} style={styles.agentCard}>
+              <View style={styles.agentIcon}>
+                <AppIcon
+                  color={control.data?.killSwitchEnabled ? colors.red : colors.mint}
+                  name={control.data?.killSwitchEnabled ? 'pause' : 'bolt'}
+                  size={21}
+                />
+              </View>
+              <View style={styles.agentCopy}>
+                <Text style={styles.cardEyebrow}>AGENT CONTROL</Text>
+                <Text style={styles.agentTitle}>
+                  {control.data?.killSwitchEnabled ? 'Execution paused' : 'Agent is active'}
+                </Text>
+                <Text style={styles.agentBody} numberOfLines={1}>
+                  {control.data?.killSwitchEnabled
+                    ? 'New approvals blocked · positions stay open'
+                    : 'Mandate checks are enforced server-side'}
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                disabled={!control.data || setKillSwitch.isPending}
+                onPress={confirmKillSwitch}
+                style={({ pressed }) => [
+                  styles.agentAction,
+                  control.data?.killSwitchEnabled && styles.agentActionResume,
+                  pressed && styles.pressed,
+                ]}
+              >
+                {setKillSwitch.isPending ? (
+                  <ActivityIndicator color={colors.text} size="small" />
+                ) : (
+                  <AppIcon
+                    color={control.data?.killSwitchEnabled ? colors.background : colors.red}
+                    name={control.data?.killSwitchEnabled ? 'play' : 'pause'}
+                    size={17}
+                  />
+                )}
+              </Pressable>
+            </FadeInView>
+
+            <FadeInView delay={110} style={styles.alertRow}>
+              <View style={styles.alertIcon}>
+                <AppIcon color={colors.blue} name="bell" size={17} />
+              </View>
+              <View style={styles.alertCopy}>
+                <Text style={styles.alertTitle}>Approval alerts</Text>
+                <Text numberOfLines={2} style={styles.alertBody}>
+                  {push.state.message}
+                </Text>
+              </View>
+              {push.state.status === 'checking' || push.state.status === 'registering' ? (
+                <ActivityIndicator color={colors.blue} size="small" />
+              ) : pushCanAct ? (
+                <Pressable onPress={pushAction} style={styles.textAction}>
+                  <Text style={styles.textActionLabel}>{pushActionLabel}</Text>
+                </Pressable>
+              ) : (
+                <View style={styles.alertState}>
+                  <View style={styles.alertStateDot} />
+                  <Text style={styles.alertStateText}>
+                    {push.state.status === 'registered' ? 'On' : 'Off'}
+                  </Text>
+                </View>
+              )}
+            </FadeInView>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.tabs}
+            >
+              {signalCategories.map((item) => {
+                const active = item === category;
+                return (
+                  <Pressable
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: active }}
+                    key={item}
+                    onPress={() => setCategory(item)}
+                    style={({ pressed }) => [
+                      styles.tab,
+                      active && styles.tabActive,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <Text style={[styles.tabText, active && styles.tabTextActive]}>
+                      {categoryCopy[item].label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.sectionHeader}>
+              <SectionHeading
+                title={copy.label}
+                trailing={<Text style={styles.sectionCount}>{query.data?.total ?? 0} SIGNALS</Text>}
+              />
+            </View>
+          </>
+        }
+        ListEmptyComponent={
+          query.isPending ? (
+            <CenteredState>
+              <ActivityIndicator color={colors.mint} size="large" />
+              <Text style={styles.stateTitle}>Loading {copy.label.toLowerCase()}</Text>
+              <Text style={styles.stateBody}>Checking the authoritative server state…</Text>
+            </CenteredState>
+          ) : query.isError ? (
+            <CenteredState>
+              <View style={[styles.stateIcon, styles.errorIcon]}>
+                <AppIcon color={colors.red} name="error" size={24} />
+              </View>
+              <Text style={styles.stateTitle}>Couldn’t load signals</Text>
+              <Text style={styles.stateBody}>{readableError(query.error)}</Text>
+              <Pressable style={styles.retryButton} onPress={() => void query.refetch()}>
+                <AppIcon color={colors.background} name="refresh" size={16} />
+                <Text style={styles.retryText}>Try again</Text>
+              </Pressable>
+              <Text numberOfLines={1} style={styles.endpoint}>
+                API · {API_BASE_URL}
+              </Text>
+            </CenteredState>
+          ) : (
+            <CenteredState>
+              <View style={styles.stateIcon}>
+                <AppIcon color={colors.mint} name="check" size={24} />
+              </View>
+              <Text style={styles.stateTitle}>You’re all caught up</Text>
               <Text style={styles.stateBody}>{copy.empty}</Text>
             </CenteredState>
-          }
-          refreshControl={
-            <RefreshControl
-              refreshing={query.isRefetching}
-              onRefresh={() => void query.refetch()}
-              tintColor={colors.mint}
-              colors={[colors.mint]}
-              progressBackgroundColor={colors.surface}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-        />
-      )}
-    </SafeAreaView>
+          )
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={query.isRefetching}
+            onRefresh={() => void query.refetch()}
+            tintColor={colors.mint}
+            colors={[colors.mint]}
+            progressBackgroundColor={colors.surfaceRaised}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      />
+    </AppScreen>
   );
 }
 
-function CenteredState({
-  children,
-  compact = false,
-}: {
-  children: React.ReactNode;
-  compact?: boolean;
-}) {
-  return <View style={[styles.state, compact && styles.stateCompact]}>{children}</View>;
+function CenteredState({ children }: { children: React.ReactNode }) {
+  return <View style={styles.state}>{children}</View>;
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: colors.background, flex: 1 },
-  header: {
-    alignItems: 'flex-start',
+  list: { paddingBottom: spacing.xxxl, paddingHorizontal: spacing.lg },
+  listEmpty: { flexGrow: 1 },
+  topBar: {
+    alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 22,
+    minHeight: 64,
   },
-  eyebrow: { color: colors.mint, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
-  title: { color: colors.text, fontSize: 31, fontWeight: '800', letterSpacing: -0.9, marginTop: 7 },
-  subtitle: { color: colors.textMuted, fontSize: 13, marginTop: 5 },
-  headerActions: { alignItems: 'flex-end', gap: 9 },
-  livePill: {
+  positionButton: {
     alignItems: 'center',
-    backgroundColor: colors.mintDark,
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    minHeight: 40,
+    paddingHorizontal: spacing.md,
+  },
+  positionButtonText: { ...typography.label, color: colors.text },
+  avatar: {
+    alignItems: 'center',
+    backgroundColor: colors.surfaceRaised,
+    borderColor: colors.border,
     borderRadius: 20,
-    flexDirection: 'row',
-    gap: 6,
-    marginTop: 2,
-    paddingHorizontal: 9,
-    paddingVertical: 7,
-  },
-  liveDot: { backgroundColor: colors.mint, borderRadius: 4, height: 6, width: 6 },
-  liveText: { color: colors.mint, fontSize: 9, fontWeight: '900', letterSpacing: 0.7 },
-  positionLink: {
-    borderColor: colors.borderStrong,
-    borderRadius: 12,
     borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    height: 40,
+    justifyContent: 'center',
+    width: 40,
   },
-  positionLinkText: { color: colors.textMuted, fontSize: 9, fontWeight: '900', letterSpacing: 0.7 },
-  pushCard: {
+  avatarText: { color: colors.textMuted, fontSize: 10, fontWeight: '700' },
+  hero: { paddingBottom: spacing.xxl, paddingTop: spacing.xs },
+  modePill: {
     alignItems: 'center',
-    backgroundColor: colors.blueDark,
-    borderColor: '#2C5275',
-    borderRadius: 16,
-    borderWidth: 1,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.mintDark,
+    borderRadius: radii.pill,
     flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'space-between',
-    marginHorizontal: 20,
-    marginTop: 18,
-    padding: 14,
+    gap: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
   },
-  pushCopy: { flex: 1 },
-  pushLabel: { color: colors.blue, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
-  pushMessage: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 4 },
-  pushAction: { color: colors.blue, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
-  compactAction: { alignItems: 'center', justifyContent: 'center', minHeight: 44, minWidth: 64 },
-  pushState: { color: colors.mint, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
-  controlCard: {
+  liveDot: { backgroundColor: colors.mint, borderRadius: 3, height: 6, width: 6 },
+  modeText: { ...typography.label, color: colors.mint, fontSize: 9, letterSpacing: 0.55 },
+  title: { ...typography.title, color: colors.text, marginTop: spacing.lg, maxWidth: 330 },
+  subtitle: { ...typography.body, color: colors.textMuted, marginTop: spacing.md, maxWidth: 340 },
+  agentCard: {
+    ...shadows.raised,
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: 16,
+    borderRadius: radii.large,
     borderWidth: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginHorizontal: 20,
-    marginTop: 10,
-    padding: 14,
+    padding: spacing.lg,
   },
-  controlCardPaused: { backgroundColor: colors.redDark, borderColor: colors.red },
-  controlLabel: { color: colors.textDim, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
-  controlTitle: { color: colors.text, fontSize: 14, fontWeight: '800', marginTop: 3 },
-  controlBody: { color: colors.textMuted, fontSize: 11, marginTop: 3 },
-  controlAction: { color: colors.red, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
-  controlActionPaused: { color: colors.mint },
-  tabs: { gap: 8, paddingHorizontal: 20, paddingVertical: 22 },
+  agentIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.mintDark,
+    borderRadius: radii.medium,
+    height: 44,
+    justifyContent: 'center',
+    width: 44,
+  },
+  agentCopy: { flex: 1, marginLeft: spacing.md },
+  cardEyebrow: { ...typography.label, color: colors.textDim, fontSize: 9 },
+  agentTitle: { color: colors.text, fontSize: 15, fontWeight: '700', marginTop: 2 },
+  agentBody: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  agentAction: {
+    alignItems: 'center',
+    backgroundColor: colors.redDark,
+    borderColor: 'rgba(255, 101, 104, 0.22)',
+    borderRadius: radii.small,
+    borderWidth: 1,
+    height: 40,
+    justifyContent: 'center',
+    marginLeft: spacing.sm,
+    width: 40,
+  },
+  agentActionResume: { backgroundColor: colors.mint, borderColor: colors.mint },
+  alertRow: {
+    alignItems: 'center',
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: spacing.md,
+  },
+  alertIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.blueDark,
+    borderRadius: radii.small,
+    height: 36,
+    justifyContent: 'center',
+    width: 36,
+  },
+  alertCopy: { flex: 1, marginHorizontal: spacing.md },
+  alertTitle: { color: colors.text, fontSize: 12, fontWeight: '700' },
+  alertBody: { ...typography.caption, color: colors.textDim, marginTop: 1 },
+  textAction: { paddingHorizontal: spacing.sm, paddingVertical: spacing.md },
+  textActionLabel: { ...typography.label, color: colors.blue, textTransform: 'uppercase' },
+  alertState: { alignItems: 'center', flexDirection: 'row', gap: 6 },
+  alertStateDot: { backgroundColor: colors.mint, borderRadius: 3, height: 6, width: 6 },
+  alertStateText: { ...typography.label, color: colors.textMuted },
+  tabs: { gap: spacing.sm, paddingBottom: spacing.xxl, paddingTop: spacing.xl },
   tab: {
     alignItems: 'center',
+    backgroundColor: colors.surface,
     borderColor: colors.border,
-    borderRadius: 22,
+    borderRadius: radii.pill,
     borderWidth: 1,
-    height: 44,
+    height: 38,
     justifyContent: 'center',
     paddingHorizontal: 15,
   },
   tabActive: { backgroundColor: colors.text, borderColor: colors.text },
-  tabText: { color: colors.textMuted, fontSize: 12, fontWeight: '700' },
-  tabTextActive: { color: colors.background },
-  list: { paddingBottom: 28, paddingHorizontal: 20 },
-  listEmpty: { flexGrow: 1 },
-  sectionHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  sectionLabel: { color: colors.text, fontSize: 14, fontWeight: '800' },
-  sectionCount: { color: colors.textDim, fontSize: 10, fontWeight: '800', letterSpacing: 0.8 },
+  tabText: { ...typography.caption, color: colors.textMuted, fontWeight: '600' },
+  tabTextActive: { color: colors.background, fontWeight: '700' },
+  sectionHeader: { marginBottom: spacing.md },
+  sectionCount: { ...typography.label, color: colors.textDim, marginTop: 3 },
   state: {
     alignItems: 'center',
-    flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 34,
-    paddingBottom: 70,
+    minHeight: 260,
+    paddingBottom: 40,
+    paddingHorizontal: spacing.xxl,
   },
-  stateCompact: { minHeight: 300 },
+  stateIcon: {
+    alignItems: 'center',
+    backgroundColor: colors.mintDark,
+    borderRadius: 24,
+    height: 48,
+    justifyContent: 'center',
+    width: 48,
+  },
+  errorIcon: { backgroundColor: colors.redDark },
   stateTitle: {
+    ...typography.section,
     color: colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-    marginTop: 16,
+    marginTop: spacing.lg,
     textAlign: 'center',
   },
-  stateBody: {
-    color: colors.textMuted,
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 7,
-    textAlign: 'center',
-  },
-  errorGlyph: {
-    backgroundColor: colors.redDark,
-    borderRadius: 28,
-    color: colors.red,
-    fontSize: 24,
-    fontWeight: '900',
-    overflow: 'hidden',
-    paddingHorizontal: 21,
-    paddingVertical: 12,
-  },
-  emptyGlyph: { color: colors.borderStrong, fontSize: 46 },
+  stateBody: { ...typography.body, color: colors.textMuted, marginTop: 6, textAlign: 'center' },
   retryButton: {
+    alignItems: 'center',
     backgroundColor: colors.mint,
-    borderRadius: 12,
-    marginTop: 20,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+    borderRadius: radii.medium,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.xl,
+    minHeight: 48,
+    paddingHorizontal: spacing.xl,
   },
-  retryText: { color: colors.background, fontSize: 14, fontWeight: '800' },
-  endpoint: { color: colors.textDim, fontSize: 10, marginTop: 16, maxWidth: 280 },
+  retryText: { color: colors.background, fontSize: 14, fontWeight: '700' },
+  endpoint: { ...typography.caption, color: colors.textDim, marginTop: spacing.lg, maxWidth: 280 },
+  pressed: { opacity: 0.72, transform: [{ scale: 0.97 }] },
 });
