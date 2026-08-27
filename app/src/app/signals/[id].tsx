@@ -16,7 +16,7 @@ import { ApprovalSheet } from '../../components/ApprovalSheet';
 import { StateChip } from '../../components/SignalCard';
 import { ApiClientError, readableError } from '../../lib/api';
 import { formatDateTime, formatPercent, formatUsd } from '../../lib/format';
-import { useMandate, useSignal } from '../../lib/queries';
+import { useMandate, useRuntimeConfig, useSignal } from '../../lib/queries';
 import { colors, radii } from '../../lib/theme';
 
 export default function SignalDetailScreen() {
@@ -24,6 +24,7 @@ export default function SignalDetailScreen() {
   const id = Array.isArray(params.id) ? (params.id[0] ?? '') : (params.id ?? '');
   const signalQuery = useSignal(id);
   const mandateQuery = useMandate();
+  const runtimeQuery = useRuntimeConfig();
   const [sheetOpen, setSheetOpen] = useState(false);
 
   if (signalQuery.isPending) {
@@ -87,6 +88,10 @@ export default function SignalDetailScreen() {
           </View>
           <StateChip state={signal.state} />
         </View>
+        <Text style={styles.modeLine}>
+          {signal.dataMode.toUpperCase()} DATA ·{' '}
+          {runtimeQuery.data?.executionMode.toUpperCase() ?? 'EXECUTION MODE UNAVAILABLE'}
+        </Text>
         <Text style={styles.heroTitle}>{signal.title ?? 'Signal analysis'}</Text>
         <View style={styles.heroMetrics}>
           <HeroMetric
@@ -462,6 +467,13 @@ const styles = StyleSheet.create({
   direction: { fontSize: 11, fontWeight: '900', letterSpacing: 1, marginTop: 5 },
   long: { color: colors.mint },
   short: { color: colors.red },
+  modeLine: {
+    color: colors.textDim,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginTop: 14,
+  },
   heroTitle: {
     color: colors.text,
     fontSize: 29,

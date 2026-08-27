@@ -36,12 +36,13 @@ export default function PositionScreen() {
   }
 
   const position = query.data;
+  const executionLabel = position.executionMode === 'paper' ? 'paper' : 'Hyperliquid testnet';
   const pnl = position.status === 'OPEN' ? position.unrealizedPnl : (position.realizedPnl ?? 0);
   const confirmClose = () => {
     if (position.status !== 'OPEN' || close.isPending) return;
     Alert.alert(
-      'Close paper position?',
-      `Close ${position.symbol} ${position.side.toLowerCase()} at the current normalized mark? Repeated taps return the same close result.`,
+      `Close ${executionLabel} position?`,
+      `Close ${position.symbol} ${position.side.toLowerCase()} through the ${executionLabel} adapter? Repeated taps return the same close result.`,
       [
         { text: 'Keep open', style: 'cancel' },
         { text: 'Close position', style: 'destructive', onPress: () => close.mutate() },
@@ -55,7 +56,7 @@ export default function PositionScreen() {
         <Pressable hitSlop={12} onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backText}>‹</Text>
         </Pressable>
-        <Text style={styles.navTitle}>PAPER POSITION</Text>
+        <Text style={styles.navTitle}>{executionLabel.toUpperCase()} POSITION</Text>
         <View style={styles.navSpacer} />
       </View>
 
@@ -106,7 +107,10 @@ export default function PositionScreen() {
             <Metric label="Notional" value={formatUsd(position.notionalUsd, 2)} />
             <Metric label="Leverage" value={`${position.leverage}x`} />
             <Metric label="Quantity" value={`${position.quantity.toFixed(8)} ${position.symbol}`} />
-            <Metric label="Stop-loss" value={formatUsd(position.stopLossPrice, 2)} />
+            <Metric
+              label="Recorded stop · not automated"
+              value={formatUsd(position.stopLossPrice, 2)}
+            />
           </View>
         </Section>
 

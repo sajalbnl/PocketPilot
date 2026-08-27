@@ -1,119 +1,144 @@
-# Phase 6 architecture
+# pocketpilot architecture
+
+## System shape
+
+```text
+Replay fixture or live venue adapters
+                |
+                v
+normalized market samples -> feature window -> Investor Skill thresholds
+                                                   |
+                                                   v
+                                           reasoning provider
+                                                   |
+                                                   v
+                                      validated structured proposal
+                                                   |
+                                                   v
+Android app <- REST + push/deep link <- server state/risk service
+                                                   |
+                                      explicit phone approval
+                                                   |
+                                                   v
+                                  paper or testnet execution adapter
+                                                   |
+                                                   v
+                                      order + position + PnL
+```
+
+Replay and live ingestion share normalization, feature calculation, deterministic rules, reasoning,
+risk, state transitions, and persistence. Paper and Hyperliquid testnet share the approval service
+and execution interface. Mode switches replace only the edge adapter.
 
 ## Trust boundaries
 
-`shared/` contains the framework-independent runtime contracts and the only signal transition map.
-The app and server consume its compiled package. The server is authoritative for persistence and
-risk and execution; the mobile app never directly changes lifecycle state or submits venue orders.
+The Expo app is an untrusted display and input client. It may validate form shape and request an
+action, but it cannot change signal state, mandate limits, execution mode, expiry, or orders. It
+contains only the public API URL and Firebase/Expo client configuration.
 
-The server's domain transition helper validates a transition first and returns a new timeline array.
-Callers persist that array as one JSONB value. Existing entries are never edited or removed, making
-the signal timeline append-only by application rule without adding a fifth audit table.
+The Node server is the authority for the mandate, state machine, current daily loss, expiry, kill
+switch, explicit approval, idempotency, execution selection, and database writes. The LLM receives
+bounded evidence and mandate context and returns schema-validated advisory JSON. It cannot sign,
+approve, or call an execution adapter.
 
-## Persistence
+The signing boundary exists only inside the server process. `HYPERLIQUID_API_PRIVATE_KEY` is parsed
+only by server configuration and passed to the SDK wallet. It is not returned by `/config`, `/health`,
+`/ops/health`, errors, notification payloads, or mobile code. SDK/network errors are replaced with
+compact allowlisted messages and non-secret metadata.
 
-PostgreSQL contains exactly four domain tables: `mandates`, `signals`, `orders`, and `positions`.
-Evidence, triggered rules, LLM output, risk previews, signal timelines, and compact execution errors
-use JSONB. The unique `orders.approval_key` constraint is the database backstop for future approval
-idempotency; `positions.order_id` is also unique so one fill cannot create multiple positions.
+## State machine
 
-Drizzle's TypeScript enum declarations import the same constant tuples used by shared Zod schemas.
-The checked-in SQL migration is the deployable database history.
+Core flow:
 
-## Time and numbers
+```text
+DETECTED -> ANALYZING -> PROPOSED -> PENDING_APPROVAL
+                                      |
+                                      v
+                          APPROVED -> EXECUTING -> FILLED -> CLOSED
+```
 
-Database timestamps are PostgreSQL `timestamp with time zone` values. API contracts serialize every
-timestamp as a UTC ISO 8601 string such as `2026-08-24T08:30:00.000Z`. Database services will perform
-the explicit `Date`/ISO conversion at their boundary. USD and price columns use fixed-precision
-PostgreSQL numerics; shared API contracts expose finite JavaScript numbers for this prototype.
+Terminal/blocking states are `NO_TRADE`, `REJECTED`, `RISK_BLOCKED`, `EXPIRED`, and
+`EXECUTION_FAILED`. Only `appendSignalTransition` creates state changes, and each transition appends
+a timestamped reason to the signal timeline. Controllers call domain services rather than updating
+state directly.
 
-## Modes
+Invalid model output never becomes approvable. An old notification resolves the current signal by
+ID: a missing signal shows an unavailable state and a terminal/expired signal shows no approval
+action.
 
-`DATA_MODE` is validated as `replay` or `live`. `EXECUTION_MODE` is validated as `paper` or
-`hyperliquid-testnet`. In Phase 1 these select no adapters yet; they establish explicit startup
-configuration for later phases. Replay and paper are the defaults and guaranteed demo path.
+## Approval and deterministic policy
 
-## Replay signal pipeline
+The approval service locks the signal and current mandate, then checks:
 
-Replay fixtures and future live clients implement the same `MarketEventSource` boundary and emit
-source-shaped events. `normalizeMarketEvent` is the only code allowed to understand those source
-payloads. All feature and signal code consumes strict normalized shared contracts.
+- legal `PENDING_APPROVAL` state;
+- current mandate asset and Hyperliquid venue allowlists;
+- notional at or below $100;
+- leverage at or below 3x;
+- directionally valid required stop;
+- realized daily loss below $25;
+- kill switch off;
+- explicit approval request present;
+- signal expiry still in the future.
 
-An explicit replay clock advances by source event time. The pipeline maintains source histories,
-calculates named features in pure TypeScript, and applies only the operators accepted by the strict
-YAML parser. A candidate key includes skill ID/version, trigger version, asset, replay ID, and window
-end. An in-process set suppresses repeats within one run; a unique database index prevents duplicates
-across processes and reruns. Generated signals enter only the legal initial `DETECTED` state.
+It checks the entire policy again immediately before adapter submission. The adapter receives only
+an already-approved typed order; there is no controller route that calls an adapter directly.
 
-## Mobile product loop
+## Idempotency and external-call boundary
 
-The Expo app uses one typed REST client. Important responses are parsed with shared Zod schemas
-before TanStack Query can cache them. Inbox category queries poll only for approval/monitoring
-states; detail polling stops for inactive states. Mutations never edit cached signal objects. They
-invalidate list/detail keys and reconcile with the authoritative API response.
+`approvalKey = signalId + ":approval-r" + approvalRevision`. The `orders` table has unique indexes
+on `approval_key` and `client_order_id`. A repeated filled revision returns its existing order and
+position. A previously failed revision returns the existing failure rather than silently creating a
+new order.
 
-## Reasoning boundary
+Paper venue IDs are deterministic hashes. Hyperliquid derives a stable 128-bit cloid from the same
+client order ID and queries `orderStatus` before any submission. This covers the critical case where
+the venue accepted an order but the server failed before committing local state. The provider also
+rejects duplicate cloids.
 
-`pocketpilot-reasoning-v1` sends only skill identity/instructions, normalized features, triggered
-rules, bounded evidence with stable IDs/timestamps, and non-secret mandate context. Provider text
-must pass the single strict `AgentDecisionSchema`. Domain validation also enforces candidate
-identity, mandate allowlists, grounded evidence IDs, and expiry bounds. Malformed output receives
-one controlled repair attempt; a second failure records a compact error and closes as `NO_TRADE`.
-The model has no approval, transition, signing, order, or execution capability.
+The prototype keeps a database transaction open during the bounded adapter call. A production
+design would use an outbox/worker sequence:
 
-Fixture mode emits deterministic schema-valid output. OpenAI mode uses the Responses API with a
-strict JSON Schema response format, bounded timeout, and at most one transient retry. Provider
-payloads and API keys are never logged.
+```text
+transactionally claim order -> commit -> submit/reconcile by cloid -> transactionally apply result
+```
 
-## Deterministic risk boundary
+That production split is deliberately excluded because it adds worker infrastructure without
+improving the 90–150 second proof-of-work demo.
 
-The pure policy engine evaluates asset, venue, notional, leverage, required directional stop,
-daily realized loss, kill switch, explicit approval, and expiry. Every result has a stable rule ID,
-pass/fail, actual value, limit, and explanation. Preliminary failure moves `PROPOSED` to
-`RISK_BLOCKED`; a passing preview moves it to `PENDING_APPROVAL`. Approval reruns policy with edited
-values, the current mandate/loss/kill-switch/time, never the stored preview. A rejected edit remains
-pending so `$150` can be corrected to `$100`; expiry transitions it to `EXPIRED`.
+## Execution adapters
 
-The four inbox categories are projections of lifecycle state, not extra persisted state:
+`ExecutionAdapter` exposes fresh price retrieval, market submission, and close. Paper fills from the
+normalized mark with configured fee/slippage and deterministic IDs. Hyperliquid testnet is pinned to
+the official testnet REST URL, allowlists BTC/ETH, obtains asset precision/index from metadata,
+submits IOC orders, retrieves fills/status, and closes with reduce-only IOC orders after checking the
+actual testnet position.
 
-- Approval Required: `PENDING_APPROVAL`
-- Monitoring: `DETECTED`, `ANALYZING`, `PROPOSED`, `APPROVED`, `EXECUTING`
-- Executed: `FILLED`, `CLOSED`
-- Expired: terminal inactive outcomes, including `EXPIRED` and `REJECTED`
+There is no automatic fallback between adapters. `EXECUTION_MODE` is stored on each order and shown
+in the app. Testnet configuration requires an explicit activation gate, exact testnet network,
+dedicated signing key, account address, and signer kind. Startup validates an API-wallet relationship
+before listening. See [Hyperliquid testnet execution note](hyperliquid-testnet.md).
 
-## Execution and control boundary
+Stops are mandatory policy inputs and are stored, but neither adapter automatically manages a
+protective order. The UI says this explicitly. Replay + paper is the recommended recorded-demo mode.
 
-`ExecutionAdapter` exposes only current-price retrieval, market submission, and position close. It
-accepts normalized symbols/sides and a stable server client-order ID; signing, SDK responses, and
-venue-specific errors remain behind the adapter. Phase 5 wires only `PaperExecutionAdapter`.
+## Data and notification behavior
 
-The paper path locks the signal and mandate row and performs approval policy, APPROVED, order claim,
-the immediate pre-execution policy check, EXECUTING, local paper fill, position creation, and FILLED
-inside one PostgreSQL transaction. The unique approval key and client-order ID are both
-`signalId:approval-rN`; `positions.order_id` guarantees one position. A duplicate revision returns
-the prior filled order/position. A close locks the position and uses `close:positionId`, so repeat
-taps return the stored close.
+Replay uses captured, clearly historical events and an event clock. Resetting removes only data
+linked to the fixed demo mandate. Live mode maintains constrained Hyperliquid and Polymarket clients,
+normalizes their data, rejects stale/misaligned evidence, and reconnects the market WebSocket with
+bounded exponential backoff.
 
-The kill-switch endpoint updates the mandate under a row lock and increments its version. Approval
-locks that same row through its second policy check and paper fill, preventing a kill-switch commit
-between the check and execution. The switch blocks new work but never closes a position.
+The notification service claims the `PENDING_APPROVAL` transition once. Push failures are recorded
+but do not roll back a valid signal. Deep-link data contains only a type, signal UUID, and matching
+`pocketpilot://signals/:id` URL. The app schema-checks both before navigation.
 
-Paper fills and marking are specified in `docs/paper-execution.md`.
+## Deliberate scope cuts
 
-## Push notification boundary
-
-Phase 6 keeps the four domain tables. A compact list of demo Expo tokens lives on the single
-mandate; one atomic delivery claim/result lives on its signal. The transition to
-`PENDING_APPROVAL` commits before notification delivery. Provider failure is observable but cannot
-roll back the signal. The notification carries only a signal ID and allowlisted app URL; the phone
-fetches current server state and cannot approve from notification data.
-
-## Live ingestion boundary
-
-Replay and live sources both emit strict source-shaped raw events into `MarketSignalPipeline`.
-Provider schemas and symbol/market meaning remain inside `server/src/live`; feature calculation,
-skill evaluation, reasoning, risk, persistence, paper fills, and marking remain shared. Live source
-health is a projection at `/ops/health`, not another persistence table. Missing, stale, or
-misaligned cross-venue evidence forces `evidence_completeness=0` before trigger evaluation.
-
-See `docs/phase6-live-and-push.md` for exact provider interfaces and operational setup.
+- no mainnet or real-fund execution;
+- no authentication/multi-user model;
+- no automatic execution or mobile-held key;
+- no automatic stop-order lifecycle;
+- no durable execution reconciliation worker;
+- no offline mobile database or mobile WebSocket;
+- no chat, full audit UI, portfolio breadth, or additional strategies;
+- no claim that replayed data is live or that a recorded stop is a placed order.

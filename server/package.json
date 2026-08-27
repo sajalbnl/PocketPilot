@@ -18,11 +18,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@nktkas/hyperliquid": "0.33.3",
     "@pocketpilot/shared": "0.1.0",
     "dotenv": "latest",
     "drizzle-orm": "latest",
     "express": "latest",
     "pg": "latest",
+    "viem": "2.55.19",
     "yaml": "^2.6.1",
     "zod": "latest"
   },

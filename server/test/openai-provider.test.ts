@@ -104,4 +104,29 @@ describe('OpenAI reasoning provider', () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('bounds a provider timeout and returns a typed failure', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        (_url: string | URL | Request, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+            });
+          }),
+      ),
+    );
+    const provider = new OpenAIReasoningProvider({
+      apiKey: 'test-key',
+      model: 'gpt-4.1-mini',
+      baseUrl: 'https://api.openai.com/v1',
+      timeoutMs: 5,
+      maxRetries: 0,
+    });
+    await expect(provider.generate({ instructions: 'bounded', context })).rejects.toMatchObject({
+      code: 'TIMEOUT',
+      retryable: true,
+    });
+  });
 });

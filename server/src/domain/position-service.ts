@@ -115,7 +115,7 @@ export class PositionService {
         const adapterCode = error instanceof ExecutionAdapterError ? error.code : 'ADAPTER_FAILURE';
         throw new PositionActionError(
           'POSITION_CLOSE_FAILED',
-          error instanceof Error ? error.message : 'Paper position close failed',
+          error instanceof Error ? error.message : 'Position close failed',
           { adapterCode },
         );
       }
@@ -142,7 +142,7 @@ export class PositionService {
         currentState: 'FILLED',
         nextState: 'CLOSED',
         currentTimeline: signal.timeline,
-        reason: 'User closed the paper position through the execution adapter',
+        reason: 'User closed the position through its recorded execution adapter',
         occurredAt: now,
         metadata: {
           closeClientOrderId: clientOrderId,
@@ -160,7 +160,7 @@ export class PositionService {
           signal: { ...signal, ...closed, updatedAt: now },
         }),
         duplicate: false,
-        message: 'Paper position closed and realized PnL recorded.',
+        message: 'Position closed and realized PnL recorded.',
       });
     });
   }

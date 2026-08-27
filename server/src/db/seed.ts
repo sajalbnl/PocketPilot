@@ -33,7 +33,7 @@ async function seed(): Promise<void> {
 
 seed()
   .catch((error: unknown) => {
-    console.error('Failed to seed Phase 3 demo mandate', error);
+    console.error('Failed to seed the demo mandate', error);
     process.exitCode = 1;
   })
   .finally(async () => {

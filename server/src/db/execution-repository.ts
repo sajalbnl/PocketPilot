@@ -67,8 +67,8 @@ export function mapPositionDetail(input: {
     signalId: input.signal.id,
     thesisHealth:
       input.position.status === 'OPEN'
-        ? 'Monitoring the linked thesis; invalidations are informational in paper mode.'
-        : 'Position closed; realized PnL is final for this paper execution.',
+        ? 'Monitoring the linked thesis; invalidations and the recorded stop are not automated protective orders.'
+        : `Position closed; realized PnL is final for this ${input.order.executionMode} execution.`,
     invalidationSummary: invalidations,
     createdAt: input.position.createdAt.toISOString(),
     updatedAt: input.position.updatedAt.toISOString(),

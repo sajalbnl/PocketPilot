@@ -24,7 +24,7 @@ import {
 
 import { ApiClientError, readableError } from '../lib/api';
 import { formatUsd } from '../lib/format';
-import { useApproveSignal, useRejectSignal } from '../lib/queries';
+import { useApproveSignal, useRejectSignal, useRuntimeConfig } from '../lib/queries';
 import { colors, radii } from '../lib/theme';
 
 interface ApprovalSheetProps {
@@ -37,7 +37,16 @@ interface ApprovalSheetProps {
 export function ApprovalSheet({ visible, onClose, signal, mandate }: ApprovalSheetProps) {
   const approve = useApproveSignal(signal.id);
   const reject = useRejectSignal(signal.id);
+  const runtime = useRuntimeConfig();
   const busy = approve.isPending || reject.isPending;
+  const executionMode = runtime.data?.executionMode;
+  const executionLabel =
+    executionMode === 'paper'
+      ? 'paper'
+      : executionMode === 'hyperliquid-testnet'
+        ? 'Hyperliquid testnet'
+        : 'configured';
+  const approvalDisabled = busy || !executionMode;
   const {
     control,
     handleSubmit,
@@ -159,8 +168,30 @@ export function ApprovalSheet({ visible, onClose, signal, mandate }: ApprovalShe
 
             <Text style={styles.safetyCopy}>
               The server reruns every deterministic rule against these edited values, checks the
-              kill switch again, and creates at most one paper order for this approval revision.
+              kill switch again, and creates at most one {executionLabel} order for this approval
+              revision. The stop is recorded for review; automated protective-order management is
+              not implemented.
             </Text>
+
+            {executionMode === 'hyperliquid-testnet' ? (
+              <View style={styles.testnetWarning}>
+                <Text style={styles.testnetWarningTitle}>TESTNET EXECUTION</Text>
+                <Text style={styles.testnetWarningBody}>
+                  This sends a real signed testnet order. A rejection or timeout will be shown as a
+                  failure; pocketpilot will not switch it to paper.
+                </Text>
+              </View>
+            ) : null}
+
+            {!executionMode ? (
+              <View style={styles.serverError}>
+                <Text style={styles.serverErrorTitle}>Execution mode unavailable</Text>
+                <Text style={styles.serverErrorBody}>
+                  Approval is disabled until the server confirms whether execution is Paper or
+                  Hyperliquid Testnet.
+                </Text>
+              </View>
+            ) : null}
 
             {serverError ? (
               <View style={styles.serverError}>
@@ -176,18 +207,18 @@ export function ApprovalSheet({ visible, onClose, signal, mandate }: ApprovalShe
 
             <Pressable
               accessibilityRole="button"
-              disabled={busy}
+              disabled={approvalDisabled}
               onPress={() => void submitApproval()}
               style={({ pressed }) => [
                 styles.approveButton,
-                busy && styles.disabled,
-                pressed && !busy && styles.pressed,
+                approvalDisabled && styles.disabled,
+                pressed && !approvalDisabled && styles.pressed,
               ]}
             >
               {approve.isPending ? (
                 <ActivityIndicator color={colors.background} />
               ) : (
-                <Text style={styles.approveText}>Approve & execute paper order</Text>
+                <Text style={styles.approveText}>Approve & execute {executionLabel} order</Text>
               )}
             </Pressable>
             <Pressable
@@ -307,6 +338,16 @@ const styles = StyleSheet.create({
   affix: { color: colors.textMuted, fontSize: 17, fontWeight: '700', marginHorizontal: 3 },
   fieldError: { color: colors.red, fontSize: 11, marginTop: 6 },
   safetyCopy: { color: colors.textDim, fontSize: 11, lineHeight: 17, marginTop: 16 },
+  testnetWarning: {
+    backgroundColor: colors.amberDark,
+    borderColor: colors.amber,
+    borderRadius: radii.small,
+    borderWidth: 1,
+    marginTop: 13,
+    padding: 12,
+  },
+  testnetWarningTitle: { color: colors.amber, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
+  testnetWarningBody: { color: colors.text, fontSize: 11, lineHeight: 17, marginTop: 4 },
   serverError: {
     backgroundColor: colors.redDark,
     borderRadius: radii.small,

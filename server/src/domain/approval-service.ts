@@ -406,9 +406,13 @@ export class ApprovalService {
         currentState: 'EXECUTING',
         nextState: 'FILLED',
         currentTimeline: executing.timeline,
-        reason: 'Execution adapter returned one complete fill and one paper position was created',
+        reason: `Execution adapter returned one complete ${env.EXECUTION_MODE} fill and one position was created`,
         occurredAt: executionNow,
-        metadata: { venueOrderId: execution.venueOrderId, positionId: position.id },
+        metadata: {
+          venueOrderId: execution.venueOrderId,
+          positionId: position.id,
+          protectiveStopPlaced: false,
+        },
       });
       await transaction
         .update(signals)
@@ -424,7 +428,7 @@ export class ApprovalService {
           duplicate: false,
           order: mapOrder(filledOrder),
           position: mapPositionDetail({ position, order: filledOrder, signal: filledSignal }),
-          message: 'Approval passed, one paper order filled, and one position was created.',
+          message: `Approval passed, one ${env.EXECUTION_MODE} order filled, and one position was created.`,
         }),
       };
     });
@@ -497,7 +501,7 @@ function compactExecutionError(error: unknown, occurredAt: Date): CompactError {
   }
   return {
     code: 'ADAPTER_FAILURE',
-    message: (error instanceof Error ? error.message : 'Paper execution failed').slice(0, 240),
+    message: (error instanceof Error ? error.message : 'Execution adapter failed').slice(0, 240),
     occurredAt: occurredAt.toISOString(),
     retryable: false,
     metadata: {},

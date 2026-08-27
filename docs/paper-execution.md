@@ -42,18 +42,21 @@ realizedPnl   = direction * quantity * (closeFill - entryFill) - entryFee - exit
 Money/PnL is rounded to eight decimals, quantity to twelve, and paper venue IDs are deterministic
 hashes of the stable client-order ID and action.
 
-## Transaction and future testnet boundary
+## Transaction and testnet boundary
 
 Paper submission is pure local calculation, so the complete approval/fill/position write runs in
 one database transaction. An adapter exception is caught inside that transaction: the order becomes
 FAILED, the signal becomes EXECUTION_FAILED, and no position is inserted.
 
-A networked Hyperliquid adapter must not hold a database transaction open across an exchange call.
-Phase 6 should split this into: (1) transactionally claim APPROVED/order PENDING with the stable
-client-order ID, (2) commit, submit externally with that ID, and (3) transactionally reconcile the
-venue result into FILLED/position or a known failure. After timeout or process crash it must query by
-client-order ID before retrying; an unknown result stays EXECUTING and must never create a second
-order. This is the unavoidable external-call boundary that paper mode does not have.
+The Phase 7 testnet prototype keeps the same transaction shape around a bounded external call. It
+adds a stable Hyperliquid cloid and queries venue status before submission, so a process crash before
+the local commit does not create a second venue order. A production service should instead: (1)
+transactionally claim APPROVED/order PENDING, (2) commit, submit externally, and (3) reconcile the
+venue result through a durable worker. The deliberate prototype tradeoff is documented in
+`docs/architecture.md`.
+
+The required stop is recorded and risk-checked but is not an automated paper or testnet protective
+order. The app labels it accordingly.
 
 ## Focused failure checks
 

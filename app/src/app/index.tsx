@@ -48,6 +48,9 @@ export default function SignalInboxScreen() {
   const copy = categoryCopy[category];
   const latestPosition = positions.data?.positions[0];
   const dataMode = runtime.data?.dataMode ?? 'replay';
+  const modeLabel = runtime.isError
+    ? 'MODE UNKNOWN'
+    : `${dataMode.toUpperCase()} · ${(runtime.data?.executionMode ?? 'paper').toUpperCase()}`;
 
   const confirmKillSwitch = () => {
     if (!control.data || setKillSwitch.isPending) return;
@@ -62,7 +65,20 @@ export default function SignalInboxScreen() {
         {
           text: enabled ? 'Enable kill switch' : 'Resume agent',
           style: enabled ? 'destructive' : 'default',
-          onPress: () => setKillSwitch.mutate({ enabled, confirmed: true }),
+          onPress: () =>
+            setKillSwitch.mutate(
+              { enabled, confirmed: true },
+              {
+                onSuccess: () =>
+                  Alert.alert(
+                    enabled ? 'Kill switch active' : 'Execution resumed',
+                    enabled
+                      ? 'New approvals and executions are now blocked.'
+                      : 'New approvals may execute after server-side policy checks.',
+                  ),
+                onError: (error) => Alert.alert('Control update failed', readableError(error)),
+              },
+            ),
         },
       ],
     );
@@ -81,7 +97,7 @@ export default function SignalInboxScreen() {
         <View style={styles.headerActions}>
           <View style={styles.livePill}>
             <View style={styles.liveDot} />
-            <Text style={styles.liveText}>{dataMode.toUpperCase()}</Text>
+            <Text style={styles.liveText}>{modeLabel}</Text>
           </View>
           {latestPosition ? (
             <Pressable
@@ -102,15 +118,27 @@ export default function SignalInboxScreen() {
         {push.state.status === 'checking' || push.state.status === 'registering' ? (
           <ActivityIndicator color={colors.blue} />
         ) : push.state.status === 'prompt' || push.state.status === 'error' ? (
-          <Pressable accessibilityRole="button" onPress={() => void push.enable()}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void push.enable()}
+            style={styles.compactAction}
+          >
             <Text style={styles.pushAction}>ENABLE</Text>
           </Pressable>
         ) : push.state.status === 'denied' && !push.state.canAskAgain ? (
-          <Pressable accessibilityRole="button" onPress={() => void Linking.openSettings()}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void Linking.openSettings()}
+            style={styles.compactAction}
+          >
             <Text style={styles.pushAction}>SETTINGS</Text>
           </Pressable>
         ) : push.state.status === 'denied' ? (
-          <Pressable accessibilityRole="button" onPress={() => void push.enable()}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => void push.enable()}
+            style={styles.compactAction}
+          >
             <Text style={styles.pushAction}>TRY AGAIN</Text>
           </Pressable>
         ) : (
@@ -289,6 +317,7 @@ const styles = StyleSheet.create({
   pushLabel: { color: colors.blue, fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   pushMessage: { color: colors.textMuted, fontSize: 11, lineHeight: 16, marginTop: 4 },
   pushAction: { color: colors.blue, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
+  compactAction: { alignItems: 'center', justifyContent: 'center', minHeight: 44, minWidth: 64 },
   pushState: { color: colors.mint, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
   controlCard: {
     alignItems: 'center',
@@ -314,7 +343,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 22,
     borderWidth: 1,
-    height: 39,
+    height: 44,
     justifyContent: 'center',
     paddingHorizontal: 15,
   },

@@ -43,7 +43,7 @@ Run `btc-followup` before enabling the kill switch to create the second pending 
 control demo.
 
 The developer endpoints are not registered in production. Reset deletes only replay-mode signals
-with a non-null Phase 3 candidate key; mandates, manual/seeded signals, orders, positions, and live
+with a non-null replay candidate key; mandates, manual/seeded signals, orders, positions, and live
 signals are untouched.
 
 ## Formulas and missing data

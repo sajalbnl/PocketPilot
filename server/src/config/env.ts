@@ -16,6 +16,22 @@ const PolymarketMappingSchema = z
   })
   .strict();
 
+const OptionalPrivateKeySchema = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{64}$/u, 'must be a 32-byte 0x-prefixed hex key')
+    .optional(),
+);
+const OptionalAddressSchema = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z
+    .string()
+    .regex(/^0x[0-9a-fA-F]{40}$/u, 'must be a 20-byte 0x-prefixed address')
+    .transform((value) => value.toLowerCase() as `0x${string}`)
+    .optional(),
+);
+
 function jsonEnvironment<T>(schema: z.ZodType<T>, fallback: string) {
   return z
     .string()
@@ -31,7 +47,7 @@ function jsonEnvironment<T>(schema: z.ZodType<T>, fallback: string) {
     .pipe(schema);
 }
 
-const EnvironmentSchema = z
+export const EnvironmentSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     DATABASE_URL: z
@@ -47,6 +63,24 @@ const EnvironmentSchema = z
     REPLAY_SPEED: z.coerce.number().finite().nonnegative().default(1_000),
     PAPER_FEE_BPS: z.coerce.number().finite().min(0).max(100).default(5),
     PAPER_SLIPPAGE_BPS: z.coerce.number().finite().min(0).max(100).default(2),
+    HYPERLIQUID_NETWORK: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.literal('testnet').optional(),
+    ),
+    HYPERLIQUID_TESTNET_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    HYPERLIQUID_API_PRIVATE_KEY: OptionalPrivateKeySchema,
+    HYPERLIQUID_ACCOUNT_ADDRESS: OptionalAddressSchema,
+    HYPERLIQUID_SIGNER_KIND: z.preprocess(
+      (value) => (value === '' ? undefined : value),
+      z.enum(['account', 'api-wallet']).optional(),
+    ),
+    HYPERLIQUID_EXECUTION_TIMEOUT_MS: z.coerce.number().int().min(2_000).max(30_000).default(8_000),
+    HYPERLIQUID_STATUS_POLL_INTERVAL_MS: z.coerce.number().int().min(100).max(5_000).default(500),
+    HYPERLIQUID_STATUS_POLL_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(6),
+    HYPERLIQUID_MARKET_SLIPPAGE_BPS: z.coerce.number().int().min(1).max(500).default(100),
     LLM_PROVIDER: z.enum(['fixture', 'openai']).default('fixture'),
     OPENAI_API_KEY: z.preprocess(
       (value) => (value === '' ? undefined : value),
@@ -84,6 +118,30 @@ const EnvironmentSchema = z
         path: ['HYPERLIQUID_RECONNECT_MAX_MS'],
         message: 'must be greater than or equal to HYPERLIQUID_RECONNECT_BASE_MS',
       });
+    }
+    if (value.EXECUTION_MODE === 'hyperliquid-testnet') {
+      const required: Array<keyof typeof value> = [
+        'HYPERLIQUID_NETWORK',
+        'HYPERLIQUID_API_PRIVATE_KEY',
+        'HYPERLIQUID_ACCOUNT_ADDRESS',
+        'HYPERLIQUID_SIGNER_KIND',
+      ];
+      for (const name of required) {
+        if (!value[name]) {
+          context.addIssue({
+            code: 'custom',
+            path: [name],
+            message: 'is required when EXECUTION_MODE=hyperliquid-testnet',
+          });
+        }
+      }
+      if (!value.HYPERLIQUID_TESTNET_ENABLED) {
+        context.addIssue({
+          code: 'custom',
+          path: ['HYPERLIQUID_TESTNET_ENABLED'],
+          message: 'must be explicitly set to true for testnet execution',
+        });
+      }
     }
   });
 

@@ -6,7 +6,7 @@ import { AgentControlService } from './domain/agent-control-service.js';
 import { ApprovalService } from './domain/approval-service.js';
 import { HealthService } from './domain/health-service.js';
 import { PositionService } from './domain/position-service.js';
-import { PaperExecutionAdapter } from './execution/paper-adapter.js';
+import { createExecutionAdapter } from './execution/factory.js';
 import { createApp } from './http/app.js';
 import { MarketPriceService, NormalizedMarketState } from './market/price-service.js';
 import { createLiveIngestionController } from './live/controller.js';
@@ -19,17 +19,9 @@ import { createReplayController } from './replay/runtime.js';
 import { loadInvestorSkill } from './skill/loader.js';
 
 const investorSkill = await loadInvestorSkill();
-if (env.EXECUTION_MODE !== 'paper') {
-  throw new Error(
-    'Hyperliquid testnet execution is reserved for Phase 7; set EXECUTION_MODE=paper',
-  );
-}
 const marketState = new NormalizedMarketState();
 const priceService = new MarketPriceService(marketState);
-const executionAdapter = new PaperExecutionAdapter(priceService, {
-  feeBps: env.PAPER_FEE_BPS,
-  slippageBps: env.PAPER_SLIPPAGE_BPS,
-});
+const executionAdapter = await createExecutionAdapter(priceService);
 const approvalService = new ApprovalService(executionAdapter);
 const positionService = new PositionService(executionAdapter);
 const agentControlService = new AgentControlService();
