@@ -159,7 +159,10 @@ export default function SignalDetailScreen() {
                 </View>
               ))}
               {signal.evidence.polymarket.map((sample) => (
-                <View key={sample.marketId} style={styles.evidenceCard}>
+                <View
+                  key={`${sample.marketId}:${sample.sourceEventId ?? `${sample.eventId}:${sample.sourceTimestamp}`}`}
+                  style={styles.evidenceCard}
+                >
                   <SourceHeader color={colors.blue} label="POLYMARKET" />
                   <Text style={styles.evidenceTitle}>{sample.question}</Text>
                   <View style={styles.statGrid}>
