@@ -27,10 +27,6 @@
       "barStyle": "light-content",
       "translucent": true
     },
-    "androidNavigationBar": {
-      "backgroundColor": "#131313",
-      "barStyle": "light-content"
-    },
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"

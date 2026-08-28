@@ -124,7 +124,7 @@ export default function SignalInboxScreen() {
             <View style={styles.topBar}>
               <BrandLockup />
               {latestPosition ? (
-                <Pressable 
+                <Pressable
                   accessibilityLabel="Open latest position"
                   accessibilityRole="button"
                   onPress={() => router.push(`/positions/${latestPosition.id}` as never)}
