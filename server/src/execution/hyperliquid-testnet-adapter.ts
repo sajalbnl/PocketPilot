@@ -382,6 +382,23 @@ export class HyperliquidTestnetExecutionAdapter implements ExecutionAdapter {
       const confirmation = await this.confirmSubmission(response, cloid, startedAt);
       return this.toExecutionResult(input.clientOrderId, input.quote.price, confirmation);
     } catch (error: unknown) {
+      // The L1 may accept the cloid even when the HTTP response is lost. Reconcile before
+      // returning an ambiguous transport failure so a fill or venue rejection is truthful.
+      if (!(error instanceof ExecutionAdapterError)) {
+        try {
+          const reconciled = await this.reconcileExisting(cloid, input.quote.price);
+          if (reconciled) {
+            return this.toExecutionResult(input.clientOrderId, input.quote.price, reconciled);
+          }
+        } catch (reconciliationError: unknown) {
+          if (
+            reconciliationError instanceof ExecutionAdapterError &&
+            reconciliationError.code === 'ORDER_REJECTED'
+          ) {
+            throw reconciliationError;
+          }
+        }
+      }
       throw normalizeAdapterError(error, 'submit');
     }
   }
@@ -393,9 +410,10 @@ export class HyperliquidTestnetExecutionAdapter implements ExecutionAdapter {
     const existing = await this.reconcileExisting(cloid, input.quote.price);
     const confirmation = existing ?? (await this.submitReduceOnlyClose(input, cloid));
     const direction = input.side === 'LONG' ? 1 : -1;
+    const closedRatio = Math.min(1, confirmation.quantity / input.quantity);
     const realizedPnl = round(
       direction * confirmation.quantity * (confirmation.fillPrice - input.entryPrice) -
-        input.entryFeeUsd -
+        input.entryFeeUsd * closedRatio -
         confirmation.feeUsd,
     );
     return {

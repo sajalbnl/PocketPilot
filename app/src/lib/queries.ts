@@ -104,7 +104,9 @@ export function useClosePosition(id: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: () => api.closePosition(id),
-    onSuccess: async () => {
+    // A testnet IOC can partially fill. The server then returns an error but commits the smaller
+    // remaining position, so refresh on both success and failure to keep the app venue-truthful.
+    onSettled: async () => {
       await Promise.all([
         client.invalidateQueries({ queryKey: queryKeys.positions }),
         client.invalidateQueries({ queryKey: queryKeys.position(id) }),

@@ -51,6 +51,10 @@ export function deriveApprovalKey(signalId: string, approvalRevision: number): s
   return `${signalId}:approval-r${approvalRevision}`;
 }
 
+export function deriveExecutionClientOrderId(approvalKey: string, reasoningRunAt: string): string {
+  return `${approvalKey}:reasoning-${reasoningRunAt}`;
+}
+
 export class ApprovalService {
   constructor(
     private readonly adapter: ExecutionAdapter,
@@ -147,6 +151,12 @@ export class ApprovalService {
       const mandate = mapMandate(mandateRow);
       const symbol = AssetSchema.parse(signal.symbol);
       const side = signal.side ?? signal.llmOutput.direction;
+      // Replay deliberately recreates the same signal ID. Keep venue idempotency stable for this
+      // persisted reasoning run without reusing a terminal cloid after a scoped demo reset.
+      const clientOrderId = deriveExecutionClientOrderId(
+        approvalKey,
+        signal.llmMetadata?.generatedAt ?? signal.updatedAt.toISOString(),
+      );
       const now = this.now();
       let quote;
       try {
@@ -242,7 +252,7 @@ export class ApprovalService {
         .values({
           signalId: signal.id,
           approvalKey,
-          clientOrderId: approvalKey,
+          clientOrderId,
           executionMode: env.EXECUTION_MODE,
           side,
           notionalUsd: request.notionalUsd,
@@ -302,7 +312,7 @@ export class ApprovalService {
         currentTimeline: approved.timeline,
         reason: 'Server authority submitted the approved order through the execution adapter',
         occurredAt: executionNow,
-        metadata: { clientOrderId: approvalKey, executionMode: env.EXECUTION_MODE },
+        metadata: { clientOrderId, executionMode: env.EXECUTION_MODE },
       });
       await transaction
         .update(signals)
@@ -317,7 +327,7 @@ export class ApprovalService {
       try {
         if (request.stopLossPrice === null) throw new Error('Approved stop-loss is missing');
         execution = await this.adapter.submitMarketOrder({
-          clientOrderId: approvalKey,
+          clientOrderId,
           symbol,
           side,
           notionalUsd: request.notionalUsd,

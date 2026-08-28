@@ -26,6 +26,14 @@ export class PositionActionError extends Error {
   }
 }
 
+export function derivePositionCloseClientOrderId(positionId: string, quantity: number): string {
+  return `close:${positionId}:qty-${quantity.toFixed(12)}`;
+}
+
+function round(value: number, digits: number): number {
+  return Number(value.toFixed(digits));
+}
+
 export class PositionService {
   constructor(
     private readonly adapter: ExecutionAdapter,
@@ -55,7 +63,7 @@ export class PositionService {
   }
 
   async close(id: string): Promise<ClosePositionResult> {
-    return db.transaction(async (transaction) => {
+    const outcome = await db.transaction(async (transaction) => {
       const [position] = await transaction
         .select()
         .from(positions)
@@ -97,7 +105,10 @@ export class PositionService {
         evidence: signal.marketSnapshot,
         fallbackPrice: position.currentPrice,
       });
-      const clientOrderId = `close:${position.id}`;
+      // Quantity is persisted and changes only after a confirmed partial close. It therefore
+      // gives retries of the same close attempt a stable ID while allowing a later attempt for
+      // the remaining venue position to use a new ID.
+      const clientOrderId = derivePositionCloseClientOrderId(position.id, position.quantity);
       let close;
       try {
         close = await this.adapter.closePosition({
@@ -121,6 +132,68 @@ export class PositionService {
       }
 
       const now = this.now();
+      const quantityTolerance = Math.max(1e-12, position.quantity * 1e-8);
+      if (
+        !Number.isFinite(close.quantity) ||
+        close.quantity <= 0 ||
+        close.quantity > position.quantity + quantityTolerance
+      ) {
+        throw new PositionActionError(
+          'POSITION_CLOSE_FAILED',
+          'The execution adapter returned an invalid close quantity; the local position was not changed.',
+          { requestedQuantity: position.quantity, filledQuantity: close.quantity },
+        );
+      }
+
+      const filledQuantity = Math.min(close.quantity, position.quantity);
+      const remainingQuantity = round(position.quantity - filledQuantity, 12);
+      if (remainingQuantity > quantityTolerance) {
+        const remainingRatio = remainingQuantity / position.quantity;
+        const remainingEntryFeeUsd = round(position.entryFeeUsd * remainingRatio, 8);
+        const partialRealizedPnl = round((position.realizedPnl ?? 0) + close.realizedPnl, 8);
+        const partialExitFeeUsd = round((position.exitFeeUsd ?? 0) + close.feeUsd, 8);
+        const remainingNotionalUsd = Math.max(
+          0.01,
+          round(position.notionalUsd * remainingRatio, 2),
+        );
+        const unrealizedPnl = calculateUnrealizedPnl({
+          side: position.side,
+          entryPrice: position.entryPrice,
+          currentPrice: close.fillPrice,
+          quantity: remainingQuantity,
+          entryFeeUsd: remainingEntryFeeUsd,
+        });
+        await transaction
+          .update(positions)
+          .set({
+            currentPrice: close.fillPrice,
+            notionalUsd: remainingNotionalUsd,
+            quantity: remainingQuantity,
+            entryFeeUsd: remainingEntryFeeUsd,
+            exitFeeUsd: partialExitFeeUsd,
+            unrealizedPnl,
+            realizedPnl: partialRealizedPnl,
+            updatedAt: now,
+          })
+          .where(eq(positions.id, position.id));
+
+        // Return the error as the transaction result instead of throwing inside it: the partial
+        // venue fill is real and its reduced local quantity must be committed before the caller
+        // is told to retry the remaining close.
+        return new PositionActionError(
+          'POSITION_CLOSE_FAILED',
+          `Hyperliquid testnet closed ${filledQuantity.toFixed(8)} ${position.symbol}, but ${remainingQuantity.toFixed(8)} ${position.symbol} remains open. The app has reconciled the remaining size; retry Close position to flatten it.`,
+          {
+            partialClose: true,
+            filledQuantity,
+            remainingQuantity,
+            closeVenueOrderId: close.venueOrderId,
+          },
+        );
+      }
+
+      const totalExitFeeUsd = round((position.exitFeeUsd ?? 0) + close.feeUsd, 8);
+      const totalRealizedPnl = round((position.realizedPnl ?? 0) + close.realizedPnl, 8);
       const [closedPosition] = await transaction
         .update(positions)
         .set({
@@ -128,9 +201,9 @@ export class PositionService {
           closePrice: close.fillPrice,
           closeClientOrderId: close.clientOrderId,
           closeVenueOrderId: close.venueOrderId,
-          exitFeeUsd: close.feeUsd,
+          exitFeeUsd: totalExitFeeUsd,
           unrealizedPnl: 0,
-          realizedPnl: close.realizedPnl,
+          realizedPnl: totalRealizedPnl,
           status: 'CLOSED',
           closedAt: now,
           updatedAt: now,
@@ -163,6 +236,8 @@ export class PositionService {
         message: 'Position closed and realized PnL recorded.',
       });
     });
+    if (outcome instanceof PositionActionError) throw outcome;
+    return outcome;
   }
 
   private async mark(row: {

@@ -208,6 +208,45 @@ describe('HyperliquidTestnetExecutionAdapter', () => {
     ).rejects.toMatchObject({ code: 'ORDER_REJECTED', retryable: false });
   });
 
+  it('reconciles an ambiguous submit failure into the actual terminal venue status', async () => {
+    const orderStatus = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'unknownOid' })
+      .mockResolvedValueOnce({
+        status: 'order',
+        order: {
+          order: { coin: 'BTC', oid: 42, origSz: '0.0015', sz: '0.0015' },
+          status: 'oracleRejected',
+          statusTimestamp: Date.parse('2026-08-25T10:00:01.000Z'),
+        },
+      });
+    const subject = adapter(
+      clients({
+        orderStatus,
+        order: vi.fn().mockRejectedValue(new Error('response connection closed')),
+      }),
+    );
+
+    await expect(
+      subject.submitMarketOrder({
+        clientOrderId: 'signal:approval-r1',
+        symbol: 'BTC',
+        side: 'LONG',
+        notionalUsd: 20,
+        leverage: 2,
+        stopLossPrice: 64_000,
+        quote,
+        evidence: null,
+        fallbackPrice: 66_000,
+      }),
+    ).rejects.toMatchObject({
+      code: 'ORDER_REJECTED',
+      retryable: false,
+      metadata: { venueStatus: 'oracleRejected' },
+    });
+    expect(orderStatus).toHaveBeenCalledTimes(2);
+  });
+
   it('bounds a testnet price timeout with a retryable structured error', async () => {
     const client = clients({
       allMids: vi.fn(
@@ -272,5 +311,47 @@ describe('HyperliquidTestnetExecutionAdapter', () => {
         fallbackPrice: 66_000,
       }),
     ).rejects.toBeInstanceOf(ExecutionAdapterError);
+  });
+
+  it('returns the actual partial close quantity and allocates only its entry fee share', async () => {
+    const partialQuantity = 0.00101;
+    const partialFee = 0.03333;
+    const client = clients({
+      order: vi.fn().mockResolvedValue({
+        response: {
+          data: {
+            statuses: [{ filled: { totalSz: String(partialQuantity), avgPx: '66010', oid: 43 } }],
+          },
+        },
+      }),
+      userFillsByTime: vi.fn().mockResolvedValue([
+        {
+          coin: 'BTC',
+          px: '66010',
+          sz: String(partialQuantity),
+          time: Date.parse('2026-08-25T10:00:01.000Z'),
+          oid: 43,
+          fee: String(partialFee),
+          feeToken: 'USDC',
+        },
+      ]),
+    });
+    const closed = await adapter(client).closePosition({
+      clientOrderId: 'close:partial-position',
+      symbol: 'BTC',
+      side: 'LONG',
+      entryPrice: 65_000,
+      quantity: 0.0015,
+      entryFeeUsd: 0.04,
+      quote,
+      evidence: null,
+      fallbackPrice: 66_000,
+    });
+
+    expect(closed.quantity).toBe(partialQuantity);
+    expect(closed.realizedPnl).toBeCloseTo(
+      partialQuantity * (66_010 - 65_000) - 0.04 * (partialQuantity / 0.0015) - partialFee,
+      6,
+    );
   });
 });

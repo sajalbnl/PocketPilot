@@ -48,7 +48,7 @@ export default function PositionScreen() {
     if (position.status !== 'OPEN' || close.isPending) return;
     Alert.alert(
       `Close ${executionLabel} position?`,
-      `Close ${position.symbol} ${position.side.toLowerCase()} through the ${executionLabel} adapter? Repeated taps return the same close result.`,
+      `Close ${position.symbol} ${position.side.toLowerCase()} through the ${executionLabel} adapter? A partial testnet fill stays open with its reconciled remaining size and can be retried.`,
       [
         { text: 'Keep open', style: 'cancel' },
         { text: 'Close position', style: 'destructive', onPress: () => close.mutate() },

@@ -80,7 +80,7 @@ export const EnvironmentSchema = z
     HYPERLIQUID_EXECUTION_TIMEOUT_MS: z.coerce.number().int().min(2_000).max(30_000).default(8_000),
     HYPERLIQUID_STATUS_POLL_INTERVAL_MS: z.coerce.number().int().min(100).max(5_000).default(500),
     HYPERLIQUID_STATUS_POLL_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(6),
-    HYPERLIQUID_MARKET_SLIPPAGE_BPS: z.coerce.number().int().min(1).max(500).default(100),
+    HYPERLIQUID_MARKET_SLIPPAGE_BPS: z.coerce.number().int().min(1).max(500).default(10),
     LLM_PROVIDER: z.enum(['fixture', 'openai']).default('fixture'),
     OPENAI_API_KEY: z.preprocess(
       (value) => (value === '' ? undefined : value),

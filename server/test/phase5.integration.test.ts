@@ -5,7 +5,7 @@ import { db } from '../src/db/client.js';
 import { mandates, orders, positions, signals } from '../src/db/schema.js';
 import { AgentControlService } from '../src/domain/agent-control-service.js';
 import { ApprovalService, SignalActionError } from '../src/domain/approval-service.js';
-import { PositionService } from '../src/domain/position-service.js';
+import { PositionActionError, PositionService } from '../src/domain/position-service.js';
 import { ExecutionAdapterError, type ExecutionAdapter } from '../src/execution/adapter.js';
 import { PaperExecutionAdapter } from '../src/execution/paper-adapter.js';
 
@@ -78,6 +78,17 @@ async function expectActionCode(promise: Promise<unknown>, code: string) {
   } catch (error: unknown) {
     expect(error).toBeInstanceOf(SignalActionError);
     expect((error as SignalActionError).code).toBe(code);
+  }
+}
+
+async function expectPositionActionCode(promise: Promise<unknown>, code: string) {
+  try {
+    await promise;
+    throw new Error(`Expected ${code}`);
+  } catch (error: unknown) {
+    expect(error).toBeInstanceOf(PositionActionError);
+    expect((error as PositionActionError).code).toBe(code);
+    return error as PositionActionError;
   }
 }
 
@@ -268,5 +279,57 @@ describe.skipIf(!runIntegration)('Phase 5 PostgreSQL execution loop', () => {
       .from(orders)
       .where(and(eq(orders.signalId, id), eq(orders.status, 'FILLED')));
     expect(rows).toHaveLength(0);
+  });
+
+  it('keeps a partially closed venue position open and uses a new close ID for its remainder', async () => {
+    const id = signalIds[7]!;
+    await db.insert(signals).values(pendingSignal(id));
+    const approval = await new ApprovalService(paper, () => new Date(now)).approve(id, {
+      approvalRevision: 1,
+      notionalUsd: 100,
+      leverage: 2,
+      stopLossPrice: 64_000,
+    });
+    const closeClientOrderIds: string[] = [];
+    const partialAdapter: ExecutionAdapter = {
+      getCurrentPrice: (input) => paper.getCurrentPrice(input),
+      submitMarketOrder: (input) => paper.submitMarketOrder(input),
+      closePosition: async (input) => {
+        closeClientOrderIds.push(input.clientOrderId);
+        if (closeClientOrderIds.length > 1) return paper.closePosition(input);
+        const quantity = Number((input.quantity * 0.8).toFixed(12));
+        return {
+          clientOrderId: input.clientOrderId,
+          venueOrderId: 'partial-close-venue-order',
+          requestedPrice: input.quote.price,
+          fillPrice: input.quote.price,
+          quantity,
+          feeUsd: 0.03,
+          slippageBps: 0,
+          executedAt: now.toISOString(),
+          realizedPnl: 0.1,
+        };
+      },
+    };
+    const service = new PositionService(partialAdapter, () => new Date(now.getTime() + 1_000));
+
+    const error = await expectPositionActionCode(
+      service.close(approval.position.id),
+      'POSITION_CLOSE_FAILED',
+    );
+    expect(error.details).toMatchObject({ partialClose: true });
+    const [remaining] = await db
+      .select()
+      .from(positions)
+      .where(eq(positions.id, approval.position.id));
+    const [stillFilled] = await db.select().from(signals).where(eq(signals.id, id));
+    expect(remaining?.status).toBe('OPEN');
+    expect(remaining?.quantity).toBeCloseTo(approval.position.quantity * 0.2, 10);
+    expect(remaining?.realizedPnl).toBe(0.1);
+    expect(stillFilled?.state).toBe('FILLED');
+
+    const completed = await service.close(approval.position.id);
+    expect(completed.position.status).toBe('CLOSED');
+    expect(closeClientOrderIds[1]).not.toBe(closeClientOrderIds[0]);
   });
 });

@@ -85,13 +85,15 @@ an already-approved typed order; there is no controller route that calls an adap
 
 ## Idempotency and external-call boundary
 
-`approvalKey = signalId + ":approval-r" + approvalRevision`. The `orders` table has unique indexes
-on `approval_key` and `client_order_id`. A repeated filled revision returns its existing order and
-position. A previously failed revision returns the existing failure rather than silently creating a
-new order.
+`approvalKey = signalId + ":approval-r" + approvalRevision`. The venue client order ID adds the
+persisted reasoning-run timestamp. The `orders` table has unique indexes on `approval_key` and
+`client_order_id`. A repeated revision within one signal run returns its existing result, while a
+scoped Replay reset receives a fresh venue ID instead of inheriting a terminal cloid from an older
+demo run.
 
-Paper venue IDs are deterministic hashes. Hyperliquid derives a stable 128-bit cloid from the same
-client order ID and queries `orderStatus` before any submission. This covers the critical case where
+Paper venue IDs are deterministic hashes. Hyperliquid derives a stable 128-bit cloid from the
+run-scoped client order ID and queries `orderStatus` before submission. If the submit response is
+lost, it reconciles the cloid again before reporting failure. This covers the critical case where
 the venue accepted an order but the server failed before committing local state. The provider also
 rejects duplicate cloids.
 
@@ -112,6 +114,14 @@ normalized mark with configured fee/slippage and deterministic IDs. Hyperliquid 
 the official testnet REST URL, allowlists BTC/ETH, obtains asset precision/index from metadata,
 submits IOC orders, retrieves fills/status, and closes with reduce-only IOC orders after checking the
 actual testnet position.
+
+Close confirmation is quantity-aware. A full fill moves the position and signal to `CLOSED`. A
+partial IOC fill commits only the remaining quantity, proportionally carries forward entry fee and
+notional, accumulates realized PnL/exit fee, and leaves the signal `FILLED` and position `OPEN`. The
+same remaining quantity produces the same close cloid for safe reconciliation; a confirmed partial
+fill changes the persisted quantity and therefore gives the user's next explicit close attempt a new
+cloid. Mobile position queries invalidate on both close success and failure so this reconciled state
+is visible immediately.
 
 There is no automatic fallback between adapters. `EXECUTION_MODE` is stored on each order and shown
 in the app. Testnet configuration requires an explicit activation gate, exact testnet network,

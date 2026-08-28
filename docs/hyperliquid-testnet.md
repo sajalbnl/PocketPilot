@@ -26,12 +26,16 @@ infer the signing format. The SDK transport is constructed with `isTestnet: true
 
 - accepts only BTC and ETH and resolves their current index/size precision from testnet `meta`;
 - gets a fresh testnet mid before the approval-time risk check;
-- converts the existing approval ID into a stable 128-bit `cloid`;
+- combines the approval ID with the persisted reasoning-run timestamp, then derives a stable 128-bit `cloid`;
 - queries `orderStatus` by that cloid before submission, in addition to the database uniqueness constraints;
-- sets whole-number cross leverage, then sends one IOC order with a 100 bps default worst-price boundary;
+- sets whole-number cross leverage, then sends one IOC order with a 10 bps default worst-price boundary;
 - normalizes actual fill price, size, venue order ID, USDC fee, and fill time from submission/fill history;
 - polls a bounded number of times when the first response does not contain a complete fill;
 - validates the external position before sending a reduce-only IOC close;
+- treats the venue's actual close fill quantity as authoritative: an IOC partial fill keeps the
+  local position open with its reconciled remaining size, allocated fees, and realized PnL;
+- derives each close-attempt cloid from the persisted remaining quantity, so a transport retry is
+  idempotent while an explicitly retried remainder receives a new cloid;
 - converts timeouts/rejections into structured adapter errors and never calls the paper adapter.
 
 An immediate fill can precede fill-history availability. In that narrow case, the adapter uses the
@@ -41,7 +45,14 @@ position. A later reconciliation/audit worker would be required for production-g
 The application still holds a database transaction open across the bounded external call. This
 keeps the prototype's state transition and local uniqueness behavior simple. A production service
 would claim the order transactionally, submit outside the transaction, and reconcile through a
-durable worker. The stable cloid makes a crash/retry safe at the venue boundary.
+durable worker. The cloid remains stable for crash/retry within one persisted signal run, while a
+new Replay run does not reuse a terminal cloid from an older scoped reset.
+
+A reduce-only IOC is not guaranteed to consume the entire requested size on a thin testnet book.
+When it partially fills, the API returns `POSITION_CLOSE_FAILED` with `partialClose: true`, commits
+the smaller remaining position as `OPEN`, and the mobile app refreshes that quantity. The user must
+explicitly tap **Close position** again to submit the remainder; the app never labels a partial fill
+as `CLOSED`.
 
 ## Stop-loss decision
 
