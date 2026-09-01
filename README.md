@@ -1,131 +1,72 @@
 # pocketpilot
 
-pocketpilot is an Android-first control surface for a finance agent. Phase 6 adds real Expo push
-alerts and live Hyperliquid/Polymarket ingestion while preserving deterministic Replay Mode and
-paper execution as the guaranteed demo path.
+pocketpilot is an Android control surface for a market-watching finance agent. It turns bounded
+Hyperliquid and Polymarket evidence into an explainable trade proposal, asks for explicit phone
+approval, reruns deterministic safety checks, and executes through either a reliable paper adapter
+or an explicitly armed Hyperliquid testnet adapter.
 
-## Prerequisites
+The guaranteed demo uses historical Replay data, fixture reasoning, and paper execution. Live data
+and testnet execution are separate, inspectable upgrades—never hidden fallbacks.
 
-- Node.js 22 or newer and npm 10 or newer
-- PostgreSQL 15 or newer, or Docker with Compose
-- Android Studio/emulator or a physical Android device for the mobile shell
+## What it demonstrates
 
-## Install and configure
+- Deterministic Replay and live Hyperliquid/Polymarket ingestion behind one normalized pipeline.
+- A versioned Investor Skill plus schema-validated reasoning grounded in supplied evidence.
+- Server-authoritative limits: $100 notional, 3x leverage, required stop, daily loss, expiry, legal
+  state, kill switch, and idempotency.
+- Android inbox, signal trace, approval editing, push/deep links, position/PnL, close, and control.
+- Idempotent paper execution and testnet-only signed Hyperliquid IOC execution with no paper fallback.
+
+```text
+Replay fixtures or live providers
+              ↓
+normalize → Investor Skill → structured thesis → phone approval
+                                                ↓
+                                  deterministic risk checks
+                                                ↓
+                                  paper or testnet adapter
+                                                ↓
+                                      order → position → PnL
+```
+
+## Stack
+
+TypeScript monorepo · Expo/React Native · Node/Express · PostgreSQL/Drizzle · Zod · Vitest · Expo
+Push · Hyperliquid API
+
+## Quick start
+
+Requires Node.js 22+, npm 10+, PostgreSQL 15+ (or Docker), and an Android emulator or device.
 
 ```bash
 npm install
 cp .env.example .env
 cp app/.env.example app/.env
-```
-
-The example environment uses local PostgreSQL and safe prototype modes:
-
-| Variable             | Allowed/example value                                       | Required                  |
-| -------------------- | ----------------------------------------------------------- | ------------------------- |
-| `DATABASE_URL`       | `postgresql://postgres:postgres@localhost:5432/pocketpilot` | yes                       |
-| `PORT`               | `3000`                                                      | defaults to `3000`        |
-| `APP_BASE_URL`       | `http://localhost:3000`                                     | defaults locally          |
-| `DATA_MODE`          | `replay` or `live`                                          | defaults to `replay`      |
-| `EXECUTION_MODE`     | `paper` or `hyperliquid-testnet`                            | defaults to `paper`       |
-| `NODE_ENV`           | `development`, `test`, or `production`                      | defaults to `development` |
-| `LLM_PROVIDER`       | `fixture` or `openai`                                       | defaults to `fixture`     |
-| `LLM_MODEL`          | OpenAI model with Structured Outputs support                | `gpt-4.1-mini`            |
-| `OPENAI_API_KEY`     | Server-side OpenAI project API key                          | only for `openai`         |
-| `OPENAI_BASE_URL`    | `https://api.openai.com/v1`                                 | defaults to official API  |
-| `LLM_TIMEOUT_MS`     | Provider request timeout                                    | defaults to `20000`       |
-| `LLM_MAX_RETRIES`    | Transient provider retries, `0` or `1`                      | defaults to `1`           |
-| `PAPER_FEE_BPS`      | Fee charged on entry and exit notional                      | defaults to `5`           |
-| `PAPER_SLIPPAGE_BPS` | Adverse paper market-fill slippage                          | defaults to `2`           |
-
-Phase 6 adds `EXPO_ACCESS_TOKEN` (optional unless Expo push security is enabled), explicit
-Hyperliquid symbol mapping, explicit Polymarket market/outcome/meaning mapping, polling/reconnect
-controls, and 120-second freshness/alignment defaults. Every value is documented in `.env.example`;
-the exact provider contracts and Android credential steps are in
-[`docs/phase6-live-and-push.md`](docs/phase6-live-and-push.md).
-
-Never commit `.env`; only `.env.example` files are tracked. `LLM_PROVIDER=fixture` is deterministic,
-offline, and recommended for replay/tests. For the real provider, create a project API key in the
-OpenAI Platform dashboard, store it only as the backend's `OPENAI_API_KEY`, and set
-`LLM_PROVIDER=openai`. Never put this key in the Expo environment.
-
-`app/.env` configures `EXPO_PUBLIC_API_URL`. Keep `http://10.0.2.2:3000` for the standard Android
-emulator. For a physical phone, replace `10.0.2.2` with the development computer's LAN IP; keep the
-phone and computer on the same network and allow inbound port 3000 through the host firewall.
-
-## Database
-
-For the included local database:
-
-```bash
 docker compose up -d db
-npm run db:migrate
-npm run db:seed
+npm run demo:prepare
 ```
 
-`npm run db:seed` is repeatable. It upserts one stable mandate allowing BTC/ETH on Hyperliquid, with
-a $100 maximum notional, 3x maximum leverage, $25 daily-loss limit, required stop and approval,
-10-minute expiry, and the kill switch off. It does not insert opportunities; Replay Mode is the only
-Phase 3 opportunity source.
+`demo:prepare` validates the safe Replay + paper configuration, migrates and seeds PostgreSQL, and
+resets only data belonging to the prototype mandate.
 
-After changing the Drizzle schema, create a new checked-in migration with `npm run db:generate`.
-
-## Run
-
-Start the API and app in separate terminals:
+Start the server and app in separate terminals:
 
 ```bash
 npm run dev:server
+```
+
+```bash
 npm run dev:app
 ```
 
-Press `a` in the Expo terminal to open Android, or run `npm run android`. Verify the API with:
+`app/.env` defaults to `http://10.0.2.2:3000` for the Android emulator. For a physical device, use
+your computer's reachable LAN address and keep both devices on the same network. Remote push on
+Android requires the configured development/preview build; see
+[Live data and push](docs/phase6-live-and-push.md).
 
-```bash
-curl http://localhost:3000/health
-```
+## Deterministic demo
 
-The endpoint returns HTTP 200 with `database: "up"` when PostgreSQL is reachable and HTTP 503 with
-`database: "down"` otherwise. `GET /config` exposes the non-secret runtime modes and server time.
-Unknown routes and request failures use the shared JSON error shape.
-
-Signal and Phase 4 replay endpoints:
-
-```text
-GET  /mandate
-GET  /signals[?state=...][&category=...]
-GET  /signals/:id
-POST /signals/:id/approve
-POST /signals/:id/reject
-GET  /positions
-GET  /positions/:id
-POST /positions/:id/close
-GET  /agent/control
-POST /agent/kill-switch
-POST /devices/push-token
-GET  /ops/health
-POST /dev/replay/start
-POST /dev/replay/step
-POST /dev/replay/reset
-GET  /dev/replay/status
-```
-
-Valid categories are `approval-required`, `monitoring`, `executed`, and `expired`. Approval accepts
-`approvalRevision`, `notionalUsd`, `leverage`, and `stopLossPrice`. Approval reruns current policy,
-locks the signal and mandate, derives `signalId:approval-rN`, and creates at most one filled order
-and position. The position endpoint marks open PnL and the app polls it every 10 seconds.
-
-## Clean Phase 5 replay demo
-
-```bash
-docker compose up -d db
-npm run db:migrate
-npm run db:seed
-npm run demo:reset
-npm run dev:server
-```
-
-In a second terminal, advance exactly through the trigger and leave the two post-trigger marks for
-the position screen:
+With the server running, consume the four trigger events:
 
 ```bash
 curl -X POST http://localhost:3000/dev/replay/start -H 'content-type: application/json' -d '{"fixture":"btc-trigger","speed":0,"stepOnly":true}'
@@ -134,78 +75,81 @@ curl -X POST http://localhost:3000/dev/replay/step
 curl -X POST http://localhost:3000/dev/replay/step
 ```
 
-Start the app with `npm run dev:app`. Open **Approval Required**, open BTC, enter `$150` and observe
-the exact maximum-notional rejection. Correct it to `$100`; approval creates one fill and routes to
-the position. Advance one replay step to mark `$66,500`, wait for the 10-second poll, then advance
-again to `$65,500` to see directionally changing PnL. Close the position from the phone.
+The app receives one BTC approval proposal. Enter `$150` to show the mandate rejection, correct it
+to `$100` to create one paper position, then use the two remaining replay steps to move PnL. The
+exact recording sequence and recovery steps are in the [demo runbook](docs/demo-runbook.md).
 
-Create the next approvable signal while execution is enabled, then enable the confirmed kill switch
-in the inbox and attempt approval:
+## Runtime modes
 
-```bash
-curl -X POST http://localhost:3000/dev/replay/start -H 'content-type: application/json' -d '{"fixture":"btc-followup","speed":0,"stepOnly":false}'
+| Data   | Execution           | Purpose                                                      |
+| ------ | ------------------- | ------------------------------------------------------------ |
+| Replay | Paper               | Deterministic, guaranteed pitch path                         |
+| Replay | Hyperliquid testnet | Repeatable signal with an actual testnet-only order          |
+| Live   | Paper               | Inspect current ingestion without external execution         |
+| Live   | Hyperliquid testnet | Advanced testnet verification; not the recorded-demo default |
+
+The root `.env` is server-only. Testnet execution requires all of the following and fails closed if
+any value is missing or ambiguous:
+
+```env
+EXECUTION_MODE=hyperliquid-testnet
+HYPERLIQUID_NETWORK=testnet
+HYPERLIQUID_TESTNET_ENABLED=true
+HYPERLIQUID_API_PRIVATE_KEY=...
+HYPERLIQUID_ACCOUNT_ADDRESS=...
+HYPERLIQUID_SIGNER_KIND=account
 ```
 
-The server returns `KILL_SWITCH_ENABLED`; it does not close the existing position. See
-`docs/paper-execution.md` for the fill/PnL contract and `docs/replay-runbook.md` for replay details.
+Prefer a dedicated API wallet. Never place signing keys or OpenAI credentials in `app/.env`, source
+control, logs, screenshots, or any `EXPO_PUBLIC_*` variable. Mainnet execution is not implemented.
+See the [Hyperliquid testnet note](docs/hyperliquid-testnet.md) before enabling this mode.
 
-## Phase 6 Replay Mode with push
+## Useful commands
 
-Keep the safe defaults in `.env`:
+| Command                                                    | Purpose                                                  |
+| ---------------------------------------------------------- | -------------------------------------------------------- |
+| `npm run demo:prepare`                                     | Validate, migrate, seed, and safely reset the paper demo |
+| `npm run demo:reset`                                       | Reset only prototype mandate data                        |
+| `npm run replay -- --fixture btc-trigger --speed 0`        | Run Replay from the CLI                                  |
+| `npm run typecheck`                                        | Typecheck shared, server, and app workspaces             |
+| `npm run lint`                                             | Run ESLint                                               |
+| `npm run format:check`                                     | Check Prettier formatting                                |
+| `npm test`                                                 | Run shared and server tests                              |
+| `RUN_DB_INTEGRATION=1 npm run test -w @pocketpilot/server` | Run PostgreSQL integration tests                         |
+| `npm run build`                                            | Build shared and server packages                         |
 
-```bash
-DATA_MODE=replay
-EXECUTION_MODE=paper
-```
-
-Then run:
-
-```bash
-docker compose up -d db
-npm run db:migrate
-npm run db:seed
-npm run demo:reset
-npm run dev:server
-```
-
-On the configured physical-device development build, start the bundler with
-`npm run start:dev-client -w @pocketpilot/app`, enable Approval Alerts once, then start the fixture:
+Build an installable Android preview APK with:
 
 ```bash
-curl -X POST http://localhost:3000/dev/replay/start \
-  -H 'content-type: application/json' \
-  -d '{"fixture":"btc-trigger","speed":0,"stepOnly":false}'
+cd app
+npx eas-cli@latest build --platform android --profile preview
 ```
 
-The proposal transition sends at most one push. Tapping it opens the server-authoritative signal.
+## Repository map
 
-## Live Mode
-
-Set `DATA_MODE=live`, leave `EXECUTION_MODE=paper`, and configure one to three current Polymarket
-IDs with explicit meaning, for example:
-
-```bash
-DATA_MODE=live
-EXECUTION_MODE=paper
-POLYMARKET_MARKETS_JSON='[{"marketId":"701502","asset":"BTC","outcome":"No","meaning":"Bitcoin remains above $45,000 through December 31, 2026"}]'
-npm run dev:server
-curl http://localhost:3000/ops/health
+```text
+app/       Expo Android client
+server/    HTTP API, domain services, ingestion, reasoning, risk, execution
+shared/    Runtime contracts and state machine shared by app and server
+skills/    Versioned Investor Skill
+fixtures/  Deterministic Replay inputs
+docs/      Architecture, runbooks, verification, and pitch notes
 ```
 
-Live conditions are not expected to force a proposal. The health response proves both providers are
-receiving and normalizing data through the same downstream pipeline. Replay remains the recorded
-trade-trigger path.
+## Documentation
 
-## Checks
+- [Architecture and trust boundaries](docs/architecture.md)
+- [Demo runbook](docs/demo-runbook.md)
+- [Replay Mode](docs/replay-runbook.md)
+- [Paper execution contract](docs/paper-execution.md)
+- [Hyperliquid testnet execution](docs/hyperliquid-testnet.md)
+- [Live data and push](docs/phase6-live-and-push.md)
+- [Failure matrix](docs/failure-matrix.md)
+- [Pitch notes](docs/pitch-notes.md)
 
-```bash
-npm run typecheck
-npm run lint
-npm run format:check
-npm test
-RUN_DB_INTEGRATION=1 npm run test -w @pocketpilot/server
-npm run build
-```
+## Deliberate limits
 
-All API timestamps are UTC ISO 8601 strings. See `docs/architecture.md` for trust boundaries,
-idempotency, JSONB use, and the append-only timeline rule.
+This is a proof-of-work prototype, not a production trading system. It has no mainnet execution,
+authentication, multi-user isolation, automatic protective-order management, or durable execution
+reconciliation worker. Stops are required and recorded but are not automatically placed. Replay +
+paper remains the recommended demo configuration.
